@@ -1,14 +1,15 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import nacl from "tweetnacl";
-import { ENDPOINTS, PAYEE, PROGRAM_ID, CHANNEL, buildVoucherMessage } from "../../shared/voucher.mjs";
+import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import { deriveChannelPda, ENDPOINTS, PROGRAM_ID } from "../../shared/voucher.mjs";
+import { createMeterBoxFetch } from "../../sdk/index.mjs";
 
 const views = ["Playground", "Payer", "Provider", "Docs"];
-
-function b64(bytes) {
-  let s = "";
-  bytes.forEach((b) => (s += String.fromCharCode(b)));
-  return btoa(s);
-}
+const payer = "11111111111111111111111111111111";
+const payee = "11111111111111111111111111111112";
+const channelId = 1;
+const channelPda = deriveChannelPda(payer, payee, channelId, PROGRAM_ID);
+const b64 = (bytes) => Buffer.from(bytes).toString("base64");
 
 export default function App() {
   const [view, setView] = useState("Playground");
@@ -16,54 +17,45 @@ export default function App() {
   const [logs, setLogs] = useState([]);
   const [rows, setRows] = useState([]);
   const [state, setState] = useState(null);
+  const [health, setHealth] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [opened, setOpened] = useState(false);
+  const [toast, setToast] = useState("");
 
-  const log = (text, kind) => setLogs((l) => [...l, { text, kind }]);
+  const log = (text, kind = "info") => setLogs((v) => [...v, { text, kind }]);
 
   async function refresh() {
-    const r = await fetch("/api/state");
-    setState(await r.json());
+    const r = await fetch(`/api/state?channel=${channelPda}`);
+    setState(r.ok ? await r.json() : null);
   }
+
+  useEffect(() => {
+    fetch("/api/health").then((r) => r.json()).then(setHealth).catch(() => {});
+    refresh();
+    const events = new EventSource("/api/events");
+    events.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      setState(data.channels?.[channelPda] || null);
+    };
+    return () => events.close();
+  }, []);
 
   async function openChannel() {
     const r = await fetch("/api/channels", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ agentPublicKey: b64(keys.publicKey) }),
+      body: JSON.stringify({
+        channelPda,
+        agentPublicKey: b64(keys.publicKey),
+        payer,
+        payee,
+        channelId,
+        deposit: "100000000",
+        spendingLimit: "1750000",
+      }),
     });
     if (!r.ok) throw new Error(await r.text());
-    setOpened(true);
-    log("channel opened, agent key registered on the API", "ok");
+    log("Channel registered", "ok");
     await refresh();
-  }
-
-  async function callPaid(ep, cumulative, nonce) {
-    const url = ep.path + (ep.name === "weather" ? "?city=Berlin" : ep.name === "price" ? "?symbol=SOL" : "");
-    log(`→ ${url}`, "req");
-    let res = await fetch(url);
-    log(`← ${res.status}`, res.status === 402 ? "warn" : "ok");
-    if (res.status !== 402) return res;
-    const message = buildVoucherMessage({
-      programId: PROGRAM_ID,
-      channel: CHANNEL,
-      payee: PAYEE,
-      cumulative,
-      nonce,
-    });
-    const signature = nacl.sign.detached(message, keys.secretKey);
-    const header = btoa(
-      JSON.stringify({
-        channel: CHANNEL,
-        cumulativeAmount: String(cumulative),
-        nonce: String(nonce),
-        signature: b64(signature),
-      }),
-    );
-    log(`  signed nonce ${nonce} cumulative ${cumulative}`, "info");
-    res = await fetch(url, { headers: { "x-meterbox-voucher": header } });
-    log(`← ${res.status} ${ep.name}`, res.ok ? "ok" : "warn");
-    return res;
   }
 
   async function runAgent() {
@@ -71,81 +63,87 @@ export default function App() {
     setLogs([]);
     setRows([]);
     try {
-      if (!opened) await openChannel();
-      let cumulative = 0;
-      let nonce = 0;
+      await openChannel();
+      const mbFetch = createMeterBoxFetch({
+        agentKeypair: keys,
+        channel: channelPda,
+        baseUrl: "",
+        spendingLimitLamports: 1_750_000,
+      });
+      let cumulative = 0n;
+      let nonce = 0n;
       for (const ep of ENDPOINTS) {
-        cumulative += ep.price;
-        nonce += 1;
-        const res = await callPaid(ep, cumulative, nonce);
-        if (res.ok) {
-          setRows((rows) => [
-            ...rows,
-            { nonce, api: ep.name, cumulative, status: "VERIFIED" },
-          ]);
+        const url = ep.path + (ep.name === "weather" ? "?city=Berlin" : ep.name === "price" ? "?symbol=SOL" : "");
+        log(`→ ${url}`, "req");
+        const r = await mbFetch(url);
+        const body = await r.json();
+        log(`← ${r.status} ${ep.name}`, r.ok ? "ok" : "warn");
+        if (r.ok) {
+          cumulative = BigInt(state?.lastCumulative || 0) + BigInt(ep.price);
+          nonce += 1n;
+          setRows((v) => [...v, { nonce: nonce.toString(), api: ep.name, cumulative: cumulative.toString(), status: "VERIFIED" }]);
+        } else if (body.error) {
+          log(body.error, "warn");
         }
       }
       await refresh();
     } catch (e) {
       log(String(e.message || e), "warn");
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   async function settle() {
-    const r = await fetch("/api/settle", { method: "POST" });
+    const r = await fetch(`/api/channels/${channelPda}/settle`, {
+      method: "POST",
+      headers: { "x-meterbox-admin-token": import.meta.env.VITE_PROVIDER_ADMIN_TOKEN || "" },
+    });
     const body = await r.json();
-    log(r.ok ? `settled delta ${body.delta}` : body.error || "settle failed", r.ok ? "ok" : "warn");
-    if (r.ok) setRows((rows) => rows.map((row) => ({ ...row, status: "SETTLED" })));
+    if (!r.ok) {
+      log(body.error || "Settle failed", "warn");
+      return;
+    }
+    setRows((v) => v.map((row) => ({ ...row, status: "SETTLED" })));
+    setToast(body.mode === "demo" ? "Settlement recorded in demo mode" : `Explorer: ${body.explorerUrl || ""}`);
     await refresh();
   }
+
+  const endpointData = (state?.calls || []).reduce((out, call) => {
+    const found = out.find((v) => v.name === call.name);
+    if (found) found.value += Number(call.price);
+    else out.push({ name: call.name, value: Number(call.price) });
+    return out;
+  }, []);
 
   return (
     <div className="app">
       <nav className="side">
-        <div className="brand">MeterBox</div>
-        {views.map((v) => (
-          <button key={v} className={view === v ? "active" : ""} onClick={() => setView(v)}>
-            {v}
-          </button>
-        ))}
+        <div className="brand"><span className="brand-mark">M</span> MeterBox</div>
+        {views.map((v) => <button key={v} className={view === v ? "active" : ""} onClick={() => setView(v)}>{v}</button>)}
       </nav>
       <main>
+        <header className="topbar">
+          <div>
+            <span className="eyebrow">SOLANA DEVNET</span>
+            <span className="pill mode">{health?.mode === "demo" || health?.mode == null ? "DEMO MODE" : "DEVNET"}</span>
+          </div>
+          {toast && <button className="toast" onClick={() => setToast("")}>{toast} ×</button>}
+        </header>
         {view === "Playground" && (
           <>
             <h1>Playground</h1>
-            <p className="muted">
-              The browser signs vouchers. The API verifies them and only then serves the paid response.
-            </p>
+            <p className="muted">Signed cumulative vouchers settle at the end of the session.</p>
             <div className="row">
-              <button className="btn" onClick={openChannel}>Open channel</button>
-              <button className="btn primary" disabled={busy} onClick={runAgent}>
-                {busy ? "Running…" : "Run agent (5 requests)"}
-              </button>
+              <button className="btn" onClick={openChannel}>Register channel</button>
+              <button className="btn primary" disabled={busy} onClick={runAgent}>{busy ? "Running…" : "Run AI agent"}</button>
               <button className="btn" onClick={settle}>Settle</button>
             </div>
             <div className="cols">
-              <section className="panel log mono">
-                {logs.length === 0 && <p className="muted">HTTP log is empty.</p>}
-                {logs.map((l, i) => (
-                  <div key={i} className={l.kind}>{l.text}</div>
-                ))}
-              </section>
-              <section className="panel">
-                <table>
-                  <thead>
-                    <tr><th>#</th><th>API</th><th>Σ lamports</th><th></th></tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((r) => (
-                      <tr key={r.nonce}>
-                        <td className="mono">{r.nonce}</td>
-                        <td>{r.api}</td>
-                        <td className="mono">{r.cumulative}</td>
-                        <td><span className={r.status === "SETTLED" ? "pill settled" : "pill"}>{r.status}</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
+              <section className="panel log mono">{logs.length === 0 ? <p className="muted">HTTP log is empty.</p> : logs.map((l, i) => <div key={i} className={l.kind}>{l.text}</div>)}</section>
+              <section className="panel table-panel">
+                <table><thead><tr><th>#</th><th>API</th><th>Σ lamports</th><th>Status</th></tr></thead>
+                  <tbody>{rows.map((r) => <tr key={r.nonce}><td className="mono">{r.nonce}</td><td>{r.api}</td><td className="mono">{r.cumulative}</td><td><span className={r.status === "SETTLED" ? "pill settled" : "pill"}>{r.status}</span></td></tr>)}</tbody>
                 </table>
               </section>
             </div>
@@ -154,11 +152,11 @@ export default function App() {
         {view === "Payer" && (
           <>
             <h1>Payer</h1>
-            <p className="muted">Agent public key is registered with the API when you open a channel.</p>
             <div className="grid">
-              <div className="card"><div className="muted">Channel</div><div className="mono">{opened ? CHANNEL : "not open"}</div></div>
-              <div className="card"><div className="muted">Payee</div><div className="mono">{PAYEE.slice(0, 18)}…</div></div>
-              <div className="card"><div className="muted">Calls</div><div className="mono">{state?.calls?.length ?? 0}</div></div>
+              <div className="card"><div className="muted">Channel</div><div className="mono copy">{channelPda}</div></div>
+              <div className="card"><div className="muted">Deposit</div><div className="mono">{state?.deposit || "100000000"}</div></div>
+              <div className="card"><div className="muted">Spent</div><div className="mono">{state?.lastCumulative || "0"}</div></div>
+              <div className="card"><div className="muted">Limit</div><div className="mono">{state?.spendingLimit || "1750000"}</div></div>
             </div>
           </>
         )}
@@ -166,22 +164,22 @@ export default function App() {
           <>
             <h1>Provider</h1>
             <div className="grid">
-              <div className="card"><div className="muted">Settled</div><div className="mono">{state?.settled ?? "0"}</div></div>
-              <div className="card"><div className="muted">Unsettled</div><div className="mono">{state?.unsettled ?? "0"}</div></div>
-              <div className="card"><div className="muted">Endpoints</div><div className="mono">5</div></div>
+              <div className="card"><div className="muted">Settled</div><div className="mono">{state?.settled || "0"}</div></div>
+              <div className="card"><div className="muted">Unsettled</div><div className="mono">{state?.unsettled || "0"}</div></div>
+              <button className="btn primary" onClick={settle}>Settle channel</button>
             </div>
-            <p className="muted">Hit Settle on the playground. The API records one settlement for every accepted voucher series.</p>
+            <section className="panel chart"><ResponsiveContainer width="100%" height={220}><BarChart data={endpointData}><XAxis dataKey="name" /><YAxis /><Bar dataKey="value" fill="#9945FF" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></section>
           </>
         )}
         {view === "Docs" && (
           <>
             <h1>Docs</h1>
-            <p className="muted">
-              A request without <span className="mono">X-METERBOX-VOUCHER</span> returns 402. The agent signs
-              cumulative lamports and a nonce. The server checks the Ed25519 signature before responding.
-              The Anchor program in <span className="mono">programs/meterbox</span> is the on-chain settlement
-              path (build with Anchor, deploy to devnet).
-            </p>
+            <section className="panel docs">
+              <h2>Agent</h2><pre>{`const mb = createMeterBoxFetch({ agentKeypair, channel, baseUrl, spendingLimitLamports })\nawait mb("/api/paid/weather")`}</pre>
+              <h2>Provider</h2><pre>{`app.get("/weather", meterbox.charge(100_000), handler)`}</pre>
+              <h2>Flow</h2><p>Request → 402 → Ed25519 signed cumulative voucher → 200 → one settlement transaction.</p>
+              <h2>Security</h2><p>The on-chain program verifies the Ed25519 instruction, agent public key, channel PDA, payee, cumulative amount, and nonce.</p>
+            </section>
           </>
         )}
       </main>

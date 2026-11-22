@@ -39,6 +39,14 @@ nav.side button, nav.side .brand {
 nav.side button.active { background: var(--raised); color: var(--fg); }
 .brand { font-weight: 600; color: var(--fg) !important; }
 main { flex: 1; padding: 28px; max-width: 1100px; }
+.topbar { min-height: 36px; display:flex; justify-content:space-between; align-items:start; }
+.eyebrow { color: var(--muted); font-size:11px; letter-spacing:.14em; margin-right:8px; }
+.brand-mark { display:inline-grid; place-items:center; width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--primary),var(--accent));color:#07110d;margin-right:6px; }
+.mode { background: rgba(20,241,149,.12); color: var(--accent); }
+.toast { border:1px solid rgba(20,241,149,.25); background:rgba(20,241,149,.08); border-radius:10px; padding:8px 10px;color:var(--accent); }
+.copy { overflow-wrap:anywhere; }
+.chart { margin-top:12px; height:260px; }
+.docs pre { background:#090a10;border:1px solid var(--border);border-radius:10px;padding:14px;overflow:auto;color:var(--accent); }
 h1 { font-size: 28px; margin: 0 0 8px; }
 .muted { color: var(--muted); }
 .row { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }

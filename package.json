@@ -4,15 +4,28 @@
   "private": true,
   "description": "Payment channels with signed cumulative vouchers for AI agents",
   "type": "module",
+  "workspaces": [
+    "sdk"
+  ],
   "scripts": {
     "dev": "concurrently -k \"node server/index.mjs\" \"vite --config client/vite.config.js\"",
     "build": "vite build --config client/vite.config.js",
     "start": "NODE_ENV=production node server/index.mjs",
-    "test": "node --test server/voucher.test.mjs"
+    "test": "node --test server/*.test.mjs sdk/*.test.mjs",
+    "demo": "npm run dev",
+    "demo:reset": "node -e \"fetch('http://127.0.0.1:8787/api/demo/reset',{method:'POST',headers:{'x-meterbox-admin-token':process.env.PROVIDER_ADMIN_TOKEN||''}}).catch(()=>{})\"",
+    "demo:agent": "node examples/agent/index.mjs",
+    "program:deploy": "solana config set --url devnet && solana airdrop 2 && anchor build && anchor deploy --provider.cluster devnet"
   },
   "dependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
+    "@solana/web3.js": "^1.99.0",
+    "better-sqlite3": "^13.2.0",
+    "buffer": "^6.0.3",
     "cors": "^2.8.5",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.7.5",
+    "supertest": "^7.3.2",
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
