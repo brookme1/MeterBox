@@ -71,8 +71,12 @@ app.get("/weather", meterbox.charge(100_000), handler);
 
 - Program ID: `Ga2tqUHwpZBCK26AJjcYsUoA4JtLzuRmMZkn72WdR1jz`
 - Explorer: https://explorer.solana.com/address/Ga2tqUHwpZBCK26AJjcYsUoA4JtLzuRmMZkn72WdR1jz?cluster=devnet
-- Devnet status: **not yet deployed**. Wallet `AtRLGAmrULYNsWgsfBjxa8scDW7ATjHb2w1GZ16pBPAg` received no airdrop and has 0 SOL.
-- Transaction signatures: pending deployment and real demo execution.
+- Devnet status: **deployed and verified**.
+- Deploy transaction: https://explorer.solana.com/tx/2P5Xv7bu93MNhGmQPRryCpYocpECQy1KCy9Tkm283n2nCQjgJEnY3f1ukFS3pQPenbHgVhNv3GJTiCjogo855Wp7?cluster=devnet
+- Demo open transaction: https://explorer.solana.com/tx/2N8zWcT9Bo2Vx2JRfiyidpSQfqC6f9fGHpHMuGpqdxP5B8bPPSvcmcsLA52k7ZUfzRC53jNTdfi34wqmNXxuGFk?cluster=devnet
+- Channel PDA: https://explorer.solana.com/address/Gv1ccx86XwuFPxWWwBbeX8LVp8tw5uL3LXgd7nWjPmEM?cluster=devnet
+- Settled transaction with Ed25519 + settle: https://explorer.solana.com/tx/5yqYegpHKzpNmk46vTxiUEEt8frahSerMFaXg5cTKmJawcmKoJd882b5m6njZgEj1v7jpctjf3dP4FsCxnu1by3j?cluster=devnet
+- Close/refund transaction: https://explorer.solana.com/tx/613YHo1Tr6QCAKH4qpvJxP8DmHHH1MYnbuRaHsyDwom8JVKG4vWiGk7TD2XUGmk15TTLMBBuBtdxg5QwqusDdRgq?cluster=devnet
 - Program source: `programs/meterbox/src/lib.rs`
 
 The program keypair is generated locally under `data/meterbox-program.json`; that directory is git-ignored. It has not been deployed unless the deploy command has completed successfully.

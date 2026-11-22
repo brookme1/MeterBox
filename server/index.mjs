@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 import rateLimit from "express-rate-limit";
 import { Connection, PublicKey, Keypair, Transaction, TransactionInstruction, Ed25519Program } from "@solana/web3.js";
 import * as anchor from "@coral-xyz/anchor";
+import BN from "bn.js";
+import { createHash } from "node:crypto";
 import {
   ENDPOINTS,
   PROGRAM_ID,
@@ -22,6 +24,10 @@ const clientOrigin = process.env.CLIENT_ORIGIN || "http://localhost:5173";
 const adminToken = process.env.PROVIDER_ADMIN_TOKEN || "";
 const dataFile = process.env.METERBOX_DATA_FILE || path.join(__dirname, "../data/state.json");
 const connection = new Connection(rpcUrl, "confirmed");
+
+function anchorDiscriminator(name) {
+  return createHash("sha256").update(`global:${name}`).digest().subarray(0, 8);
+}
 
 app.use(cors({ origin: clientOrigin === "*" ? true : clientOrigin }));
 app.use(express.json({ limit: "32kb" }));
@@ -82,6 +88,28 @@ app.post("/api/channels", async (req, res) => {
   if (agentBytes.length !== 32) return res.status(400).json({ error: "agent public key must be 32 bytes" });
   const expectedPda = deriveChannelPda(payer, payee, Number(channelId), PROGRAM_ID);
   if (channelPda !== expectedPda) return res.status(400).json({ error: "channelPda does not match the channel seeds" });
+  if (mode === "devnet") {
+    try {
+      const account = await connection.getAccountInfo(new PublicKey(channelPda), "confirmed");
+      if (!account) return res.status(400).json({ error: "channel account does not exist on devnet" });
+      const data = account.data;
+      const decodedPayer = new PublicKey(data.subarray(8, 40));
+      const decodedPayee = new PublicKey(data.subarray(40, 72));
+      const decodedAgent = new PublicKey(data.subarray(72, 104));
+      const decodedId = Number(data.readBigUInt64LE(104));
+      const decodedDeposit = data.readBigUInt64LE(112).toString();
+      const decodedLimit = data.readBigUInt64LE(120).toString();
+      if (!decodedPayer.equals(new PublicKey(payer))) return res.status(400).json({ error: "on-chain payer mismatch" });
+      if (!decodedPayee.equals(new PublicKey(payee))) return res.status(400).json({ error: "on-chain payee mismatch" });
+      if (!decodedAgent.equals(new PublicKey(Buffer.from(agentBytes)))) return res.status(400).json({ error: "on-chain agent mismatch" });
+      if (decodedId !== Number(channelId)) return res.status(400).json({ error: "on-chain channelId mismatch" });
+      if (deposit != null && decodedDeposit !== String(deposit)) return res.status(400).json({ error: "on-chain deposit mismatch" });
+      if (spendingLimit != null && decodedLimit !== String(spendingLimit)) return res.status(400).json({ error: "on-chain spending limit mismatch" });
+      Object.assign(req, { decodedOnChain: true });
+    } catch (error) {
+      return res.status(400).json({ error: `channel verification failed: ${error.message}` });
+    }
+  }
   state.channels[channelPda] = {
     channelPda,
     agentPublicKey,
@@ -178,7 +206,11 @@ function checkVoucher(req, price) {
   });
   const agent = Buffer.from(channel.agentPublicKey, "base64");
   if (!nacl.sign.detached.verify(message, signature, agent)) {
-    return { ok: false, status: 401, error: "invalid signature" };
+    return {
+      ok: false,
+      status: 401,
+      error: "invalid signature",
+    };
   }
   channel.lastNonce = nonce.toString();
   channel.lastCumulative = cumulative.toString();
@@ -196,7 +228,8 @@ for (const ep of ENDPOINTS) {
       } catch {}
     }
     if (!id) {
-      id = Object.keys(state.channels)[0];
+      const ids = Object.keys(state.channels);
+      id = ids[ids.length - 1];
     }
     const result = checkVoucher(req, ep.price);
     if (!result.ok) {
@@ -246,11 +279,111 @@ app.post("/api/channels/:id/settle", requireAdmin, async (req, res) => {
     return res.status(503).json({ error: "provider keypair is not configured" });
   }
   try {
-    let provider;
+    let providerKeypair;
     if (process.env.PROVIDER_KEYPAIR_PATH) {
-      provider = anchor.AnchorProvider.env?.();
+      providerKeypair = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(process.env.PROVIDER_KEYPAIR_PATH, "utf8"))));
+    } else if (process.env.PROVIDER_KEYPAIR_BASE58) {
+      const { default: bs58 } = await import("bs58");
+      providerKeypair = Keypair.fromSecretKey(bs58.decode(process.env.PROVIDER_KEYPAIR_BASE58));
+    } else {
+      providerKeypair = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(path.join(process.env.HOME || "", ".config/solana/id.json"), "utf8"))));
     }
-    return res.status(501).json({ error: "devnet settlement requires an installed Anchor IDL and deployed program" });
+    if (!providerKeypair.publicKey.equals(new PublicKey(channel.payee))) {
+      return res.status(403).json({ error: "provider keypair does not match the channel payee" });
+    }
+    if (!channel.latestSignature) {
+      return res.status(400).json({ error: "no signed voucher is available" });
+    }
+    const cumulativeBn = new BN(channel.lastCumulative);
+    const nonceBn = new BN(channel.lastNonce);
+    const message = buildVoucherMessage({
+      programId: PROGRAM_ID,
+      channel: req.params.id,
+      payee: channel.payee,
+      cumulative: cumulative.toString(),
+      nonce: channel.lastNonce,
+    });
+    const signature = Buffer.from(channel.latestSignature, "base64");
+    const ed25519Instruction = Ed25519Program.createInstructionWithPublicKey({
+      publicKey: Buffer.from(channel.agentPublicKey, "base64"),
+      message,
+      signature,
+    });
+    const settleData = Buffer.concat([
+      anchorDiscriminator("settle"),
+      Buffer.from(cumulativeBn.toArrayLike(Buffer, "le", 8)),
+      Buffer.from(nonceBn.toArrayLike(Buffer, "le", 8)),
+    ]);
+    const settleInstruction = new TransactionInstruction({
+      programId: new PublicKey(PROGRAM_ID),
+      keys: [
+        { pubkey: providerKeypair.publicKey, isSigner: true, isWritable: true },
+        { pubkey: new PublicKey(req.params.id), isSigner: false, isWritable: true },
+        { pubkey: new PublicKey("Sysvar1nstructions1111111111111111111111111"), isSigner: false, isWritable: false },
+        { pubkey: new PublicKey("SysvarRent111111111111111111111111111111111"), isSigner: false, isWritable: false },
+      ],
+      data: settleData,
+    });
+    const tx = new Transaction().add(ed25519Instruction).add(settleInstruction);
+    tx.feePayer = providerKeypair.publicKey;
+    tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+    tx.sign(providerKeypair);
+    const signatureHex = await connection.sendRawTransaction(tx.serialize());
+    await connection.confirmTransaction(signatureHex, "confirmed");
+    channel.settled = cumulative.toString();
+    const settlement = {
+      delta: delta.toString(),
+      cumulative: cumulative.toString(),
+      at: new Date().toISOString(),
+      mode: "devnet",
+      signature: signatureHex,
+      explorerUrl: `https://explorer.solana.com/tx/${signatureHex}?cluster=devnet`,
+    };
+    channel.settlements.push(settlement);
+    saveState();
+    return res.json(settlement);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/channels/:id/close", requireAdmin, async (req, res) => {
+  const channel = channelState(req.params.id);
+  if (!channel) return res.status(404).json({ error: "channel not found" });
+  if (mode === "demo") return res.json({ mode: "demo", note: "Channel state closed in demo mode" });
+  try {
+    const providerKeypair = Keypair.fromSecretKey(
+      Uint8Array.from(
+        JSON.parse(fs.readFileSync(
+          process.env.PROVIDER_KEYPAIR_PATH || path.join(process.env.HOME || "", ".config/solana/id.json"),
+          "utf8",
+        )),
+      ),
+    );
+    if (!providerKeypair.publicKey.equals(new PublicKey(channel.payee))) {
+      return res.status(403).json({ error: "provider keypair does not match the channel payee" });
+    }
+    const instruction = new TransactionInstruction({
+      programId: new PublicKey(PROGRAM_ID),
+      keys: [
+        { pubkey: providerKeypair.publicKey, isSigner: false, isWritable: true },
+        { pubkey: providerKeypair.publicKey, isSigner: true, isWritable: false },
+        { pubkey: providerKeypair.publicKey, isSigner: true, isWritable: false },
+        { pubkey: new PublicKey(req.params.id), isSigner: false, isWritable: true },
+      ],
+      data: anchorDiscriminator("close_channel"),
+    });
+    const tx = new Transaction().add(instruction);
+    tx.feePayer = providerKeypair.publicKey;
+    tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+    tx.sign(providerKeypair);
+    const signature = await connection.sendRawTransaction(tx.serialize());
+    await connection.confirmTransaction(signature, "confirmed");
+    return res.json({
+      mode: "devnet",
+      signature,
+      explorerUrl: `https://explorer.solana.com/tx/${signature}?cluster=devnet`,
+    });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
