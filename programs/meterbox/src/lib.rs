@@ -7,7 +7,7 @@ use anchor_lang::solana_program::{
     },
 };
 
-declare_id!("4CoXFP5uD1nxZwXqX7ws49nyaYnAEjPVE9GgWVmcQ865");
+declare_id!("Ga2tqUHwpZBCK26AJjcYsUoA4JtLzuRmMZkn72WdR1jz");
 
 pub const VOUCHER_PREFIX: &[u8] = b"METERBOX_VOUCHER_V1";
 
@@ -62,13 +62,15 @@ pub mod meterbox {
 
     /// Pay `cumulative - settled` to the payee after verifying the agent voucher.
     pub fn settle(ctx: Context<Settle>, cumulative_amount: u64, nonce: u64) -> Result<()> {
+        let channel_address = ctx.accounts.channel.key();
+        let payee = ctx.accounts.payee.key();
         let channel = &mut ctx.accounts.channel;
         require!(nonce > channel.last_nonce, MeterboxError::NonceTooLow);
         require!(cumulative_amount > channel.settled, MeterboxError::AmountNotIncreasing);
         require!(cumulative_amount <= channel.spending_limit, MeterboxError::ExceedsLimit);
         require!(cumulative_amount <= channel.deposit, MeterboxError::ExceedsDeposit);
 
-        verify_voucher(ctx.accounts.instructions_sysvar.as_ref(), channel, ctx.accounts.payee.key(), cumulative_amount, nonce)?;
+        verify_voucher(ctx.accounts.instructions_sysvar.as_ref(), channel, channel_address, payee, cumulative_amount, nonce)?;
 
         let delta = cumulative_amount
             .checked_sub(channel.settled)
@@ -126,6 +128,7 @@ pub mod meterbox {
 fn verify_voucher(
     instructions: &AccountInfo,
     channel: &Channel,
+    channel_address: Pubkey,
     payee: Pubkey,
     cumulative_amount: u64,
     nonce: u64,
@@ -164,7 +167,7 @@ fn verify_voucher(
     let mut expected = Vec::with_capacity(19 + 32 + 32 + 32 + 8 + 8);
     expected.extend_from_slice(VOUCHER_PREFIX);
     expected.extend_from_slice(crate::ID.as_ref());
-    expected.extend_from_slice(&channel.key().to_bytes());
+    expected.extend_from_slice(&channel_address.to_bytes());
     expected.extend_from_slice(payee.as_ref());
     expected.extend_from_slice(&cumulative_amount.to_le_bytes());
     expected.extend_from_slice(&nonce.to_le_bytes());

@@ -4,14 +4,14 @@ import { buildVoucherMessage } from "../shared/voucher.mjs";
 
 test("voucher message is deterministic and includes the prefix", () => {
   const a = buildVoucherMessage({
-    programId: "4CoXFP5uD1nxZwXqX7ws49nyaYnAEjPVE9GgWVmcQ865",
+    programId: "Ga2tqUHwpZBCK26AJjcYsUoA4JtLzuRmMZkn72WdR1jz",
     channel: "11111111111111111111111111111111",
     payee: "11111111111111111111111111111112",
     cumulative: 1000,
     nonce: 2,
   });
   const b = buildVoucherMessage({
-    programId: "4CoXFP5uD1nxZwXqX7ws49nyaYnAEjPVE9GgWVmcQ865",
+    programId: "Ga2tqUHwpZBCK26AJjcYsUoA4JtLzuRmMZkn72WdR1jz",
     channel: "11111111111111111111111111111111",
     payee: "11111111111111111111111111111112",
     cumulative: 1000,
@@ -24,7 +24,7 @@ test("voucher message is deterministic and includes the prefix", () => {
 
 test("golden voucher vector", () => {
   const message = buildVoucherMessage({
-    programId: "4CoXFP5uD1nxZwXqX7ws49nyaYnAEjPVE9GgWVmcQ865",
+    programId: "Ga2tqUHwpZBCK26AJjcYsUoA4JtLzuRmMZkn72WdR1jz",
     channel: "11111111111111111111111111111111",
     payee: "11111111111111111111111111111112",
     cumulative: 1000,
@@ -32,6 +32,6 @@ test("golden voucher vector", () => {
   });
   assert.equal(
     Buffer.from(message).toString("hex"),
-    "4d45544552424f585f564f55434845525f56312f990d3dda26062b1d60b7d48c6154c0dc85189f831504b6b0a1f25cc1888bea00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001e8030000000000000200000000000000",
+    "4d45544552424f585f564f55434845525f5631e7559ca0dd7a5576dabf6ee57c46c58fce7075469e0d94e95e03a9d01207b71d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001e8030000000000000200000000000000",
   );
 });

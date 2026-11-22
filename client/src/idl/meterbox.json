@@ -1,0 +1,503 @@
+{
+  "address": "Ga2tqUHwpZBCK26AJjcYsUoA4JtLzuRmMZkn72WdR1jz",
+  "metadata": {
+    "name": "meterbox",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "close_channel",
+      "discriminator": [
+        0,
+        104,
+        36,
+        1,
+        66,
+        0,
+        103,
+        157
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true
+        },
+        {
+          "name": "payer_signer",
+          "signer": true,
+          "optional": true
+        },
+        {
+          "name": "payee_signer",
+          "signer": true,
+          "optional": true
+        },
+        {
+          "name": "channel",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  104,
+                  97,
+                  110,
+                  110,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "channel.payer",
+                "account": "Channel"
+              },
+              {
+                "kind": "account",
+                "path": "channel.payee",
+                "account": "Channel"
+              },
+              {
+                "kind": "account",
+                "path": "channel.channel_id",
+                "account": "Channel"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "open_channel",
+      "discriminator": [
+        91,
+        45,
+        253,
+        71,
+        140,
+        166,
+        107,
+        109
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "payee"
+        },
+        {
+          "name": "channel",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  104,
+                  97,
+                  110,
+                  110,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "payer"
+              },
+              {
+                "kind": "account",
+                "path": "payee"
+              },
+              {
+                "kind": "arg",
+                "path": "channel_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "channel_id",
+          "type": "u64"
+        },
+        {
+          "name": "agent",
+          "type": "pubkey"
+        },
+        {
+          "name": "deposit",
+          "type": "u64"
+        },
+        {
+          "name": "spending_limit",
+          "type": "u64"
+        },
+        {
+          "name": "expires_at",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "settle",
+      "docs": [
+        "Pay `cumulative - settled` to the payee after verifying the agent voucher."
+      ],
+      "discriminator": [
+        175,
+        42,
+        185,
+        87,
+        144,
+        131,
+        102,
+        212
+      ],
+      "accounts": [
+        {
+          "name": "payee",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "channel"
+          ]
+        },
+        {
+          "name": "channel",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  104,
+                  97,
+                  110,
+                  110,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "channel.payer",
+                "account": "Channel"
+              },
+              {
+                "kind": "account",
+                "path": "channel.payee",
+                "account": "Channel"
+              },
+              {
+                "kind": "account",
+                "path": "channel.channel_id",
+                "account": "Channel"
+              }
+            ]
+          }
+        },
+        {
+          "name": "instructions_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "cumulative_amount",
+          "type": "u64"
+        },
+        {
+          "name": "nonce",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Channel",
+      "discriminator": [
+        49,
+        159,
+        99,
+        106,
+        220,
+        87,
+        219,
+        88
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "ChannelClosed",
+      "discriminator": [
+        119,
+        198,
+        23,
+        254,
+        216,
+        124,
+        84,
+        16
+      ]
+    },
+    {
+      "name": "ChannelOpened",
+      "discriminator": [
+        253,
+        213,
+        255,
+        96,
+        31,
+        188,
+        47,
+        170
+      ]
+    },
+    {
+      "name": "Settled",
+      "discriminator": [
+        232,
+        210,
+        40,
+        17,
+        142,
+        124,
+        145,
+        238
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidDeposit",
+      "msg": "Deposit must be greater than zero"
+    },
+    {
+      "code": 6001,
+      "name": "ExceedsDeposit",
+      "msg": "Spending limit exceeds the channel deposit"
+    },
+    {
+      "code": 6002,
+      "name": "ExceedsLimit",
+      "msg": "Cumulative amount exceeds the spending limit"
+    },
+    {
+      "code": 6003,
+      "name": "NonceTooLow",
+      "msg": "Nonce must increase"
+    },
+    {
+      "code": 6004,
+      "name": "AmountNotIncreasing",
+      "msg": "Cumulative amount must increase"
+    },
+    {
+      "code": 6005,
+      "name": "MathOverflow",
+      "msg": "Checked arithmetic overflow"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidExpiry",
+      "msg": "Channel expiry must be in the future"
+    },
+    {
+      "code": 6007,
+      "name": "MissingEd25519Instruction",
+      "msg": "Missing or invalid Ed25519 instruction"
+    },
+    {
+      "code": 6008,
+      "name": "MalformedEd25519Instruction",
+      "msg": "Malformed Ed25519 instruction"
+    },
+    {
+      "code": 6009,
+      "name": "Ed25519ExternalData",
+      "msg": "Ed25519 public key or message must be in this instruction"
+    },
+    {
+      "code": 6010,
+      "name": "VoucherAgentMismatch",
+      "msg": "Voucher public key does not match the channel agent"
+    },
+    {
+      "code": 6011,
+      "name": "VoucherMismatch",
+      "msg": "Voucher message does not match this settlement"
+    },
+    {
+      "code": 6012,
+      "name": "RentMinimumExceeded",
+      "msg": "Settlement would exceed the rent-exempt minimum"
+    },
+    {
+      "code": 6013,
+      "name": "ChannelNotClosable",
+      "msg": "Channel cannot be closed by this signer"
+    },
+    {
+      "code": 6014,
+      "name": "MissingPayer",
+      "msg": "Payer account is missing"
+    },
+    {
+      "code": 6015,
+      "name": "UnauthorizedClose",
+      "msg": "Unauthorized close"
+    }
+  ],
+  "types": [
+    {
+      "name": "Channel",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "payer",
+            "type": "pubkey"
+          },
+          {
+            "name": "payee",
+            "type": "pubkey"
+          },
+          {
+            "name": "agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "channel_id",
+            "type": "u64"
+          },
+          {
+            "name": "deposit",
+            "type": "u64"
+          },
+          {
+            "name": "spending_limit",
+            "type": "u64"
+          },
+          {
+            "name": "settled",
+            "type": "u64"
+          },
+          {
+            "name": "last_nonce",
+            "type": "u64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ChannelClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "channel",
+            "type": "pubkey"
+          },
+          {
+            "name": "payer",
+            "type": "pubkey"
+          },
+          {
+            "name": "payee",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ChannelOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "channel",
+            "type": "pubkey"
+          },
+          {
+            "name": "payer",
+            "type": "pubkey"
+          },
+          {
+            "name": "payee",
+            "type": "pubkey"
+          },
+          {
+            "name": "agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "deposit",
+            "type": "u64"
+          },
+          {
+            "name": "spending_limit",
+            "type": "u64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Settled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "channel",
+            "type": "pubkey"
+          },
+          {
+            "name": "delta",
+            "type": "u64"
+          },
+          {
+            "name": "cumulative",
+            "type": "u64"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}

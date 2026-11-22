@@ -78,6 +78,7 @@ Check the hackathon time limit before recording. The target is 2:30 to 3:00.
 - Terminal agent fails: verify the server URL, then use the dashboard Run AI agent button.
 - Anthropic key is missing: the scripted agent still works offline.
 - Devnet deployment fails: keep demo mode visible and say it clearly.
+- Devnet wallet has no SOL: fund `AtRLGAmrULYNsWgsfBjxa8scDW7ATjHb2w1GZ16pBPAg` from https://faucet.solana.com/ before attempting real transactions.
 
 ## Recording tips
 
@@ -98,4 +99,4 @@ MeterBox is payment infrastructure for autonomous AI agents on Solana. It replac
 - Repository: add your GitHub repository URL.
 - Live demo: add the deployed URL, if available.
 - Video: add the uploaded demo video URL.
-- Program ID: `4CoXFP5uD1nxZwXqX7ws49nyaYnAEjPVE9GgWVmcQ865`.
+- Program ID: `Ga2tqUHwpZBCK26AJjcYsUoA4JtLzuRmMZkn72WdR1jz`.

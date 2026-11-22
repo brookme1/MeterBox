@@ -1,2 +1,2 @@
 export const PROGRAM_ID =
-  process.env.PROGRAM_ID || "4CoXFP5uD1nxZwXqX7ws49nyaYnAEjPVE9GgWVmcQ865";
+  process.env.PROGRAM_ID || "Ga2tqUHwpZBCK26AJjcYsUoA4JtLzuRmMZkn72WdR1jz";

@@ -69,8 +69,10 @@ app.get("/weather", meterbox.charge(100_000), handler);
 
 ## Solana
 
-- Program ID: `4CoXFP5uD1nxZwXqX7ws49nyaYnAEjPVE9GgWVmcQ865`
-- Explorer: https://explorer.solana.com/address/4CoXFP5uD1nxZwXqX7ws49nyaYnAEjPVE9GgWVmcQ865?cluster=devnet
+- Program ID: `Ga2tqUHwpZBCK26AJjcYsUoA4JtLzuRmMZkn72WdR1jz`
+- Explorer: https://explorer.solana.com/address/Ga2tqUHwpZBCK26AJjcYsUoA4JtLzuRmMZkn72WdR1jz?cluster=devnet
+- Devnet status: **not yet deployed**. Wallet `AtRLGAmrULYNsWgsfBjxa8scDW7ATjHb2w1GZ16pBPAg` received no airdrop and has 0 SOL.
+- Transaction signatures: pending deployment and real demo execution.
 - Program source: `programs/meterbox/src/lib.rs`
 
 The program keypair is generated locally under `data/meterbox-program.json`; that directory is git-ignored. It has not been deployed unless the deploy command has completed successfully.
