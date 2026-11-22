@@ -1,0 +1,77 @@
+:root {
+  color-scheme: dark;
+  --bg: #07080d;
+  --surface: #0e1018;
+  --raised: #141725;
+  --fg: #f4f5f8;
+  --muted: #8d90a3;
+  --primary: #9945ff;
+  --accent: #14f195;
+  --cyan: #00c2ff;
+  --amber: #f5a524;
+  --border: rgba(255, 255, 255, 0.08);
+  font-family: Inter, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); }
+button { cursor: pointer; font: inherit; color: inherit; }
+a { color: inherit; }
+.app { display: flex; min-height: 100vh; }
+nav.side {
+  width: 220px;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+nav.side button, nav.side .brand {
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  padding: 12px;
+  color: var(--muted);
+}
+nav.side button.active { background: var(--raised); color: var(--fg); }
+.brand { font-weight: 600; color: var(--fg) !important; }
+main { flex: 1; padding: 28px; max-width: 1100px; }
+h1 { font-size: 28px; margin: 0 0 8px; }
+.muted { color: var(--muted); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+.btn {
+  min-height: 44px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--raised);
+  padding: 0 14px;
+}
+.btn.primary {
+  background: var(--primary);
+  border-color: transparent;
+  box-shadow: 0 8px 24px rgba(153, 69, 255, 0.35);
+}
+.grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.card, .panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+}
+.mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+.log { max-height: 360px; overflow: auto; font-size: 12px; line-height: 1.5; }
+.ok { color: var(--accent); }
+.warn { color: var(--amber); }
+.info { color: var(--cyan); }
+.cols { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 8px 6px; border-top: 1px solid var(--border); }
+.pill { border-radius: 999px; padding: 2px 8px; font-size: 11px; background: rgba(0, 194, 255, 0.15); color: var(--cyan); }
+.pill.settled { background: rgba(20, 241, 149, 0.15); color: var(--accent); }
+@media (max-width: 800px) {
+  .app { flex-direction: column; }
+  nav.side { width: auto; flex-direction: row; overflow: auto; }
+}
