@@ -9,7 +9,11 @@ const payer = "11111111111111111111111111111111";
 const payee = "11111111111111111111111111111112";
 const channelId = 1;
 const channelPda = deriveChannelPda(payer, payee, channelId, PROGRAM_ID);
-const b64 = (bytes) => Buffer.from(bytes).toString("base64");
+const b64 = (bytes) => {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+};
 
 export default function App() {
   const [view, setView] = useState("Playground");

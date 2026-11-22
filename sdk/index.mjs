@@ -2,7 +2,9 @@ import nacl from "tweetnacl";
 import { buildVoucherMessage } from "../shared/voucher.mjs";
 
 function b64(bytes) {
-  return Buffer.from(bytes).toString("base64");
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
 }
 
 export function createMeterBoxFetch({
@@ -47,7 +49,7 @@ export function createMeterBoxFetch({
       nonce: nonce.toString(),
       signature: b64(signature),
     };
-    const header = b64(Buffer.from(JSON.stringify(payload)));
+    const header = b64(new TextEncoder().encode(JSON.stringify(payload)));
     const headers = new Headers(init.headers);
     headers.set("x-meterbox-voucher", header);
     return fetch(`${baseUrl}${typeof input === "string" ? input : input.url}`, {
