@@ -6,3 +6,12 @@ client/dist/
 target/
 .anchor/
 test-ledger/
+*.json.key
+.env
+.env.*
+!.env.example
+target/
+data/
+node_modules/
+dist/
+*.log

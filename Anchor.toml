@@ -2,10 +2,10 @@
 anchor_version = "0.30.1"
 
 [programs.localnet]
-meterbox = "MeterBox1111111111111111111111111111111111"
+meterbox = "4CoXFP5uD1nxZwXqX7ws49nyaYnAEjPVE9GgWVmcQ865"
 
 [programs.devnet]
-meterbox = "MeterBox1111111111111111111111111111111111"
+meterbox = "4CoXFP5uD1nxZwXqX7ws49nyaYnAEjPVE9GgWVmcQ865"
 
 [provider]
 cluster = "Localnet"

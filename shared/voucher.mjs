@@ -1,12 +1,32 @@
+import { PublicKey } from "@solana/web3.js";
+import { PROGRAM_ID } from "./config.mjs";
+
 export const PREFIX = new TextEncoder().encode("METERBOX_VOUCHER_V1");
+export { PROGRAM_ID };
+
+export function publicKeyBytes(value) {
+  return new PublicKey(value).toBytes();
+}
+
+export function deriveChannelPda(payer, payee, channelId, programId = PROGRAM_ID) {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [
+      new TextEncoder().encode("channel"),
+      publicKeyBytes(payer),
+      publicKeyBytes(payee),
+      u64(channelId),
+    ],
+    new PublicKey(programId),
+  );
+  return pda.toBase58();
+}
 
 export function buildVoucherMessage({ programId, channel, payee, cumulative, nonce }) {
-  const enc = new TextEncoder();
   const parts = [
     PREFIX,
-    enc.encode(programId.padEnd(32, "\0").slice(0, 32)),
-    enc.encode(channel.padEnd(32, "\0").slice(0, 32)),
-    enc.encode(payee.padEnd(32, "\0").slice(0, 32)),
+    publicKeyBytes(programId),
+    publicKeyBytes(channel),
+    publicKeyBytes(payee),
     u64(cumulative),
     u64(nonce),
   ];
@@ -26,10 +46,6 @@ function u64(n) {
   for (let i = 0; i < 8; i++) b[i] = Number((v >> BigInt(8 * i)) & 0xffn);
   return b;
 }
-
-export const PROGRAM_ID = "MeterBox1111111111111111111111111111111111";
-export const PAYEE = "MeterBoxDemoPayee11111111111111111111";
-export const CHANNEL = "demo-channel-1";
 
 export const ENDPOINTS = [
   { path: "/api/paid/weather", name: "weather", price: 100_000 },
