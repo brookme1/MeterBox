@@ -25,10 +25,10 @@ sequenceDiagram
 ## Quickstart
 
 ```bash
-npm install
-npm test
+corepack pnpm@9.15.9 install
+corepack pnpm@9.15.9 test
 cp .env.example .env
-npm run dev
+corepack pnpm@9.15.9 dev
 ```
 
 Open `http://localhost:5173`.
@@ -36,7 +36,7 @@ Open `http://localhost:5173`.
 Production:
 
 ```bash
-npm run build
+corepack pnpm@9.15.9 build
 npm start
 ```
 
@@ -73,18 +73,19 @@ app.get("/weather", meterbox.charge(100_000), handler);
 - Explorer: https://explorer.solana.com/address/Ga2tqUHwpZBCK26AJjcYsUoA4JtLzuRmMZkn72WdR1jz?cluster=devnet
 - Devnet status: **deployed and verified**.
 - Deploy transaction: https://explorer.solana.com/tx/2P5Xv7bu93MNhGmQPRryCpYocpECQy1KCy9Tkm283n2nCQjgJEnY3f1ukFS3pQPenbHgVhNv3GJTiCjogo855Wp7?cluster=devnet
-- Demo open transaction: https://explorer.solana.com/tx/2N8zWcT9Bo2Vx2JRfiyidpSQfqC6f9fGHpHMuGpqdxP5B8bPPSvcmcsLA52k7ZUfzRC53jNTdfi34wqmNXxuGFk?cluster=devnet
-- Channel PDA: https://explorer.solana.com/address/Gv1ccx86XwuFPxWWwBbeX8LVp8tw5uL3LXgd7nWjPmEM?cluster=devnet
-- Settled transaction with Ed25519 + settle: https://explorer.solana.com/tx/5yqYegpHKzpNmk46vTxiUEEt8frahSerMFaXg5cTKmJawcmKoJd882b5m6njZgEj1v7jpctjf3dP4FsCxnu1by3j?cluster=devnet
-- Close/refund transaction: https://explorer.solana.com/tx/613YHo1Tr6QCAKH4qpvJxP8DmHHH1MYnbuRaHsyDwom8JVKG4vWiGk7TD2XUGmk15TTLMBBuBtdxg5QwqusDdRgq?cluster=devnet
+- Verified five-call run (weather, sentiment, price, search, image; 1,750,000 lamports):
+  - Open: https://explorer.solana.com/tx/3Rrot9MFcvMrifYRUDWpUKR2V4Mdk1nmJbMf3U974MPqYZpTGkRAkBGyG5uwKv4n1psYBd2pj9WNkdgNMn9CDLMB?cluster=devnet
+  - Channel (closed after settlement): https://explorer.solana.com/address/A2agETbFZQxePbvXpFJMX3tm8ZFjACNX9W4MhjUUVj9i?cluster=devnet
+  - Settle (Ed25519 verification + MeterBox): https://explorer.solana.com/tx/3RbyDkM1MbBpLWM9acYdFsjNhy5Q9eJotQAu5SssunztmLZTMcYCWGo1zCuyEjMXhgRjJXBfVueftPGJZ7GYyBmT?cluster=devnet
+  - Close/refund: https://explorer.solana.com/tx/3YxkM6edXEf3SvzAodNFE2uvPNc3dZA6ssziWNTr1eyY63mqeLtozf8zUsKbgztxjvuXFbQgwsjB6NzEbBUvAbrL?cluster=devnet
 - Program source: `programs/meterbox/src/lib.rs`
 
-The program keypair is generated locally under `data/meterbox-program.json`; that directory is git-ignored. It has not been deployed unless the deploy command has completed successfully.
+The deployment keypair stays local and is git-ignored. The program is deployed to devnet at the program ID above.
 
 Deploy:
 
 ```bash
-npm run program:deploy
+corepack pnpm@9.15.9 program:deploy
 ```
 
 ## Security model
@@ -99,12 +100,14 @@ The server verifies vouchers off-chain before returning API data. The Anchor set
 - Devnet deploy and real wallet/close flows require the Solana/Anchor toolchain and funded wallet.
 - The provider currently supports one payee per channel.
 
-## Demo
+## Devnet demo
 
 ```bash
-npm run demo
-npm run demo:agent
+SOLANA_MODE=devnet PROVIDER_KEYPAIR_PATH="$HOME/.config/solana/id.json" corepack pnpm@9.15.9 dev
+SOLANA_MODE=devnet PROVIDER_KEYPAIR_PATH="$HOME/.config/solana/id.json" corepack pnpm@9.15.9 demo:agent
 ```
+
+The CLI flow opens a devnet channel, makes five signed paid API requests, settles the cumulative voucher, and closes the channel. The browser playground is read-only in devnet mode; its channel operations are available in demo mode.
 
 ## License
 

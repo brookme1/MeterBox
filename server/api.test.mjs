@@ -27,7 +27,7 @@ async function register() {
 
 test("402 without voucher", async () => {
   await register();
-  const res = await request.get("/api/paid/weather");
+  const res = await request.get("/api/paid/weather").set("x-meterbox-channel", channel);
   assert.equal(res.status, 402);
   assert.equal(res.body.lastAcceptedNonce, "0");
 });
@@ -62,6 +62,28 @@ test("401 forged signature", async () => {
   const voucher = b64(Buffer.from(JSON.stringify({ channel, cumulativeAmount: "100000", nonce: "1", signature: b64(forged) })));
   const res = await request.get("/api/paid/weather").set("x-meterbox-voucher", voucher);
   assert.equal(res.status, 401);
+  assert.equal(res.body.error, "invalid signature");
+});
+
+test("401 tampered voucher", async () => {
+  await register();
+  const message = buildVoucherMessage({ programId: PROGRAM_ID, channel, payee, cumulative: 100_000, nonce: 1 });
+  const signature = nacl.sign.detached(message, keys.secretKey);
+  const voucher = b64(Buffer.from(JSON.stringify({ channel, cumulativeAmount: "150000", nonce: "1", signature: b64(signature) })));
+  const res = await request.get("/api/paid/weather").set("x-meterbox-voucher", voucher);
+  assert.equal(res.status, 401);
+  assert.equal(res.body.error, "invalid signature");
+});
+
+test("402 voucher over spending limit", async () => {
+  await register();
+  const cumulative = 1_800_000;
+  const message = buildVoucherMessage({ programId: PROGRAM_ID, channel, payee, cumulative, nonce: 1 });
+  const signature = nacl.sign.detached(message, keys.secretKey);
+  const voucher = b64(Buffer.from(JSON.stringify({ channel, cumulativeAmount: String(cumulative), nonce: "1", signature: b64(signature) })));
+  const res = await request.get("/api/paid/weather").set("x-meterbox-voucher", voucher);
+  assert.equal(res.status, 402);
+  assert.equal(res.body.error, "spending limit exceeded");
 });
 
 test("settle needs admin token", async () => {

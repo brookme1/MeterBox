@@ -17,7 +17,10 @@ export function createMeterBoxFetch({
   let nonce = 0n;
   const limit = BigInt(spendingLimitLamports);
   return async function meterboxFetch(input, init = {}) {
-    let res = await fetch(`${baseUrl}${typeof input === "string" ? input : input.url}`, init);
+    const url = `${baseUrl}${typeof input === "string" ? input : input.url}`;
+    const requestHeaders = new Headers(init.headers);
+    requestHeaders.set("x-meterbox-channel", channel);
+    let res = await fetch(url, { ...init, headers: requestHeaders });
     if (res.status !== 402) return res;
     const paywall = await res.clone().json();
     if (paywall.lastAcceptedCumulative != null) {
@@ -51,8 +54,9 @@ export function createMeterBoxFetch({
     };
     const header = b64(new TextEncoder().encode(JSON.stringify(payload)));
     const headers = new Headers(init.headers);
+    headers.set("x-meterbox-channel", channel);
     headers.set("x-meterbox-voucher", header);
-    return fetch(`${baseUrl}${typeof input === "string" ? input : input.url}`, {
+    return fetch(url, {
       ...init,
       headers,
     });

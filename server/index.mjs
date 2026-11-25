@@ -221,8 +221,8 @@ function checkVoucher(req, price) {
 for (const ep of ENDPOINTS) {
   app.all(ep.path, (req, res) => {
     const header = req.get("x-meterbox-voucher");
-    let id;
-    if (header) {
+    let id = req.get("x-meterbox-channel");
+    if (!id && header) {
       try {
         id = JSON.parse(Buffer.from(header, "base64").toString("utf8")).channel;
       } catch {}
@@ -231,11 +231,15 @@ for (const ep of ENDPOINTS) {
       const ids = Object.keys(state.channels);
       id = ids[ids.length - 1];
     }
+    if (!channelState(id)) return res.status(404).json({ error: "channel not registered" });
     const result = checkVoucher(req, ep.price);
     if (!result.ok) {
       if (result.status === 402) {
         const body = paywall(id, ep.path, ep.price);
-        return res.status(402).set("WWW-Authenticate", "MeterBox").json(body);
+        return res.status(402).set("WWW-Authenticate", "MeterBox").json({
+          ...body,
+          ...(result.error ? { error: result.error } : {}),
+        });
       }
       return res.status(result.status).json({ error: result.error });
     }

@@ -80,7 +80,7 @@ console.log("MeterBox AI agent demo");
 console.log("Task: Give me a morning brief for a SOL trader in Berlin.");
 let spent = 0n;
 let calls = 0;
-for (const ep of ENDPOINTS.slice(0, 4)) {
+for (const ep of ENDPOINTS) {
   const url = ep.path + (ep.name === "weather" ? "?city=Berlin" : ep.name === "price" ? "?symbol=SOL" : "");
   const res = await mbFetch(url);
   const body = await res.json();
