@@ -7,6 +7,91 @@
   },
   "instructions": [
     {
+      "name": "close_agent_policy",
+      "discriminator": [
+        252,
+        238,
+        193,
+        237,
+        110,
+        206,
+        103,
+        18
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "channel",
+            "policy"
+          ]
+        },
+        {
+          "name": "channel",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  104,
+                  97,
+                  110,
+                  110,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "channel.payer",
+                "account": "Channel"
+              },
+              {
+                "kind": "account",
+                "path": "channel.payee",
+                "account": "Channel"
+              },
+              {
+                "kind": "account",
+                "path": "channel.channel_id",
+                "account": "Channel"
+              }
+            ]
+          },
+          "relations": [
+            "policy"
+          ]
+        },
+        {
+          "name": "policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "channel"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "close_channel",
       "discriminator": [
         0,
@@ -153,6 +238,236 @@
       ]
     },
     {
+      "name": "request_close",
+      "discriminator": [
+        82,
+        168,
+        167,
+        86,
+        14,
+        15,
+        199,
+        180
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "channel"
+          ]
+        },
+        {
+          "name": "channel",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  104,
+                  97,
+                  110,
+                  110,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "channel.payer",
+                "account": "Channel"
+              },
+              {
+                "kind": "account",
+                "path": "channel.payee",
+                "account": "Channel"
+              },
+              {
+                "kind": "account",
+                "path": "channel.channel_id",
+                "account": "Channel"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "dispute_window",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "rotate_agent",
+      "discriminator": [
+        182,
+        91,
+        147,
+        107,
+        155,
+        47,
+        150,
+        176
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "channel"
+          ]
+        },
+        {
+          "name": "channel",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  104,
+                  97,
+                  110,
+                  110,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "channel.payer",
+                "account": "Channel"
+              },
+              {
+                "kind": "account",
+                "path": "channel.payee",
+                "account": "Channel"
+              },
+              {
+                "kind": "account",
+                "path": "channel.channel_id",
+                "account": "Channel"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "agent",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_agent_policy",
+      "discriminator": [
+        138,
+        209,
+        250,
+        191,
+        75,
+        33,
+        132,
+        162
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "channel"
+          ]
+        },
+        {
+          "name": "channel",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  104,
+                  97,
+                  110,
+                  110,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "channel.payer",
+                "account": "Channel"
+              },
+              {
+                "kind": "account",
+                "path": "channel.payee",
+                "account": "Channel"
+              },
+              {
+                "kind": "account",
+                "path": "channel.channel_id",
+                "account": "Channel"
+              }
+            ]
+          }
+        },
+        {
+          "name": "policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "channel"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "max_per_request",
+          "type": "u64"
+        },
+        {
+          "name": "daily_limit",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "settle",
       "docs": [
         "Pay `cumulative - settled` to the payee after verifying the agent voucher."
@@ -230,9 +545,158 @@
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "top_up",
+      "discriminator": [
+        236,
+        225,
+        96,
+        9,
+        60,
+        106,
+        77,
+        208
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "channel"
+          ]
+        },
+        {
+          "name": "channel",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  104,
+                  97,
+                  110,
+                  110,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "channel.payer",
+                "account": "Channel"
+              },
+              {
+                "kind": "account",
+                "path": "channel.payee",
+                "account": "Channel"
+              },
+              {
+                "kind": "account",
+                "path": "channel.channel_id",
+                "account": "Channel"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "update_spending_limit",
+      "discriminator": [
+        52,
+        197,
+        101,
+        229,
+        64,
+        88,
+        84,
+        131
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "channel"
+          ]
+        },
+        {
+          "name": "channel",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  104,
+                  97,
+                  110,
+                  110,
+                  101,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "channel.payer",
+                "account": "Channel"
+              },
+              {
+                "kind": "account",
+                "path": "channel.payee",
+                "account": "Channel"
+              },
+              {
+                "kind": "account",
+                "path": "channel.channel_id",
+                "account": "Channel"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "spending_limit",
+          "type": "u64"
+        }
+      ]
     }
   ],
   "accounts": [
+    {
+      "name": "AgentPolicy",
+      "discriminator": [
+        148,
+        193,
+        218,
+        129,
+        21,
+        96,
+        195,
+        77
+      ]
+    },
     {
       "name": "Channel",
       "discriminator": [
@@ -248,6 +712,45 @@
     }
   ],
   "events": [
+    {
+      "name": "AgentPolicyClosed",
+      "discriminator": [
+        97,
+        97,
+        185,
+        66,
+        170,
+        55,
+        35,
+        92
+      ]
+    },
+    {
+      "name": "AgentPolicyUpdated",
+      "discriminator": [
+        30,
+        0,
+        38,
+        214,
+        59,
+        232,
+        158,
+        228
+      ]
+    },
+    {
+      "name": "AgentRotated",
+      "discriminator": [
+        128,
+        98,
+        178,
+        231,
+        254,
+        100,
+        152,
+        242
+      ]
+    },
     {
       "name": "ChannelClosed",
       "discriminator": [
@@ -275,6 +778,32 @@
       ]
     },
     {
+      "name": "ChannelToppedUp",
+      "discriminator": [
+        54,
+        225,
+        177,
+        32,
+        80,
+        12,
+        60,
+        115
+      ]
+    },
+    {
+      "name": "CloseRequested",
+      "discriminator": [
+        136,
+        120,
+        170,
+        78,
+        168,
+        236,
+        47,
+        118
+      ]
+    },
+    {
       "name": "Settled",
       "discriminator": [
         232,
@@ -285,6 +814,19 @@
         124,
         145,
         238
+      ]
+    },
+    {
+      "name": "SpendingLimitUpdated",
+      "discriminator": [
+        152,
+        223,
+        230,
+        104,
+        84,
+        31,
+        78,
+        7
       ]
     }
   ],
@@ -368,9 +910,109 @@
       "code": 6015,
       "name": "UnauthorizedClose",
       "msg": "Unauthorized close"
+    },
+    {
+      "code": 6016,
+      "name": "InvalidTopUp",
+      "msg": "Top-up amount must be greater than zero"
+    },
+    {
+      "code": 6017,
+      "name": "InvalidAgent",
+      "msg": "Agent public key cannot be the default key"
+    },
+    {
+      "code": 6018,
+      "name": "InvalidCloseWindow",
+      "msg": "Close dispute window must be between 60 seconds and 30 days"
+    },
+    {
+      "code": 6019,
+      "name": "InvalidAgentPolicy",
+      "msg": "Agent policy limits are invalid"
     }
   ],
   "types": [
+    {
+      "name": "AgentPolicy",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "channel",
+            "type": "pubkey"
+          },
+          {
+            "name": "payer",
+            "type": "pubkey"
+          },
+          {
+            "name": "max_per_request",
+            "type": "u64"
+          },
+          {
+            "name": "daily_limit",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AgentPolicyClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "channel",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AgentPolicyUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "channel",
+            "type": "pubkey"
+          },
+          {
+            "name": "max_per_request",
+            "type": "u64"
+          },
+          {
+            "name": "daily_limit",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AgentRotated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "channel",
+            "type": "pubkey"
+          },
+          {
+            "name": "previous_agent",
+            "type": "pubkey"
+          },
+          {
+            "name": "agent",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
     {
       "name": "Channel",
       "type": {
@@ -476,6 +1118,42 @@
       }
     },
     {
+      "name": "ChannelToppedUp",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "channel",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "deposit",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CloseRequested",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "channel",
+            "type": "pubkey"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "Settled",
       "type": {
         "kind": "struct",
@@ -494,6 +1172,22 @@
           },
           {
             "name": "nonce",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SpendingLimitUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "channel",
+            "type": "pubkey"
+          },
+          {
+            "name": "spending_limit",
             "type": "u64"
           }
         ]

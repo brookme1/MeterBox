@@ -103,6 +103,104 @@ pub mod meterbox {
         Ok(())
     }
 
+    pub fn top_up(ctx: Context<ManageChannel>, amount: u64) -> Result<()> {
+        require!(amount > 0, MeterboxError::InvalidTopUp);
+        let channel = &mut ctx.accounts.channel;
+        channel.deposit = channel
+            .deposit
+            .checked_add(amount)
+            .ok_or(MeterboxError::MathOverflow)?;
+        let cpi = CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            anchor_lang::system_program::Transfer {
+                from: ctx.accounts.payer.to_account_info(),
+                to: channel.to_account_info(),
+            },
+        );
+        anchor_lang::system_program::transfer(cpi, amount)?;
+        emit!(ChannelToppedUp {
+            channel: channel.key(),
+            amount,
+            deposit: channel.deposit,
+        });
+        Ok(())
+    }
+
+    pub fn update_spending_limit(
+        ctx: Context<ManageChannel>,
+        spending_limit: u64,
+    ) -> Result<()> {
+        let channel = &mut ctx.accounts.channel;
+        require!(spending_limit <= channel.deposit, MeterboxError::ExceedsDeposit);
+        require!(spending_limit >= channel.settled, MeterboxError::ExceedsLimit);
+        channel.spending_limit = spending_limit;
+        emit!(SpendingLimitUpdated {
+            channel: channel.key(),
+            spending_limit,
+        });
+        Ok(())
+    }
+
+    pub fn rotate_agent(ctx: Context<ManageChannel>, agent: Pubkey) -> Result<()> {
+        require!(agent != Pubkey::default(), MeterboxError::InvalidAgent);
+        let channel = &mut ctx.accounts.channel;
+        let previous_agent = channel.agent;
+        channel.agent = agent;
+        emit!(AgentRotated {
+            channel: channel.key(),
+            previous_agent,
+            agent,
+        });
+        Ok(())
+    }
+
+    pub fn request_close(ctx: Context<ManageChannel>, dispute_window: i64) -> Result<()> {
+        require!(
+            (60..=2_592_000).contains(&dispute_window),
+            MeterboxError::InvalidCloseWindow
+        );
+        let channel = &mut ctx.accounts.channel;
+        channel.expires_at = Clock::get()?
+            .unix_timestamp
+            .checked_add(dispute_window)
+            .ok_or(MeterboxError::MathOverflow)?;
+        emit!(CloseRequested {
+            channel: channel.key(),
+            expires_at: channel.expires_at,
+        });
+        Ok(())
+    }
+
+    pub fn set_agent_policy(
+        ctx: Context<SetAgentPolicy>,
+        max_per_request: u64,
+        daily_limit: u64,
+    ) -> Result<()> {
+        let channel = &ctx.accounts.channel;
+        require!(max_per_request > 0, MeterboxError::InvalidAgentPolicy);
+        require!(max_per_request <= daily_limit, MeterboxError::InvalidAgentPolicy);
+        require!(daily_limit <= channel.spending_limit, MeterboxError::InvalidAgentPolicy);
+        let policy = &mut ctx.accounts.policy;
+        policy.channel = channel.key();
+        policy.payer = channel.payer;
+        policy.max_per_request = max_per_request;
+        policy.daily_limit = daily_limit;
+        policy.bump = ctx.bumps.policy;
+        emit!(AgentPolicyUpdated {
+            channel: channel.key(),
+            max_per_request,
+            daily_limit,
+        });
+        Ok(())
+    }
+
+    pub fn close_agent_policy(ctx: Context<CloseAgentPolicy>) -> Result<()> {
+        emit!(AgentPolicyClosed {
+            channel: ctx.accounts.channel.key(),
+        });
+        Ok(())
+    }
+
     pub fn close_channel(ctx: Context<CloseChannel>) -> Result<()> {
         let channel = &ctx.accounts.channel;
         let clock = Clock::get()?;
@@ -211,6 +309,62 @@ pub struct Settle<'info> {
 }
 
 #[derive(Accounts)]
+pub struct ManageChannel<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"channel", channel.payer.as_ref(), channel.payee.as_ref(), &channel.channel_id.to_le_bytes()],
+        bump = channel.bump,
+        has_one = payer
+    )]
+    pub channel: Account<'info, Channel>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct SetAgentPolicy<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(
+        seeds = [b"channel", channel.payer.as_ref(), channel.payee.as_ref(), &channel.channel_id.to_le_bytes()],
+        bump = channel.bump,
+        has_one = payer
+    )]
+    pub channel: Account<'info, Channel>,
+    #[account(
+        init_if_needed,
+        payer = payer,
+        space = 8 + 32 + 32 + 8 + 8 + 1,
+        seeds = [b"policy", channel.key().as_ref()],
+        bump
+    )]
+    pub policy: Account<'info, AgentPolicy>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct CloseAgentPolicy<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(
+        seeds = [b"channel", channel.payer.as_ref(), channel.payee.as_ref(), &channel.channel_id.to_le_bytes()],
+        bump = channel.bump,
+        has_one = payer
+    )]
+    pub channel: Account<'info, Channel>,
+    #[account(
+        mut,
+        close = payer,
+        seeds = [b"policy", channel.key().as_ref()],
+        bump = policy.bump,
+        has_one = payer,
+        has_one = channel
+    )]
+    pub policy: Account<'info, AgentPolicy>,
+}
+
+#[derive(Accounts)]
 pub struct CloseChannel<'info> {
     /// CHECK: Destination receives the channel rent and remaining lamports.
     #[account(mut)]
@@ -237,6 +391,15 @@ pub struct Channel {
     pub settled: u64,
     pub last_nonce: u64,
     pub expires_at: i64,
+    pub bump: u8,
+}
+
+#[account]
+pub struct AgentPolicy {
+    pub channel: Pubkey,
+    pub payer: Pubkey,
+    pub max_per_request: u64,
+    pub daily_limit: u64,
     pub bump: u8,
 }
 
@@ -274,6 +437,14 @@ pub enum MeterboxError {
     MissingPayer,
     #[msg("Unauthorized close")]
     UnauthorizedClose,
+    #[msg("Top-up amount must be greater than zero")]
+    InvalidTopUp,
+    #[msg("Agent public key cannot be the default key")]
+    InvalidAgent,
+    #[msg("Close dispute window must be between 60 seconds and 30 days")]
+    InvalidCloseWindow,
+    #[msg("Agent policy limits are invalid")]
+    InvalidAgentPolicy,
 }
 
 #[event]
@@ -300,6 +471,44 @@ pub struct ChannelClosed {
     pub channel: Pubkey,
     pub payer: Pubkey,
     pub payee: Pubkey,
+}
+
+#[event]
+pub struct ChannelToppedUp {
+    pub channel: Pubkey,
+    pub amount: u64,
+    pub deposit: u64,
+}
+
+#[event]
+pub struct SpendingLimitUpdated {
+    pub channel: Pubkey,
+    pub spending_limit: u64,
+}
+
+#[event]
+pub struct AgentRotated {
+    pub channel: Pubkey,
+    pub previous_agent: Pubkey,
+    pub agent: Pubkey,
+}
+
+#[event]
+pub struct CloseRequested {
+    pub channel: Pubkey,
+    pub expires_at: i64,
+}
+
+#[event]
+pub struct AgentPolicyUpdated {
+    pub channel: Pubkey,
+    pub max_per_request: u64,
+    pub daily_limit: u64,
+}
+
+#[event]
+pub struct AgentPolicyClosed {
+    pub channel: Pubkey,
 }
 
 #[cfg(test)]

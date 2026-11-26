@@ -48,6 +48,13 @@ describe("meterbox", () => {
     )[0];
   }
 
+  function derivePolicy(channel: PublicKey) {
+    return PublicKey.findProgramAddressSync(
+      [Buffer.from("policy"), channel.toBuffer()],
+      program.programId,
+    )[0];
+  }
+
   function voucherMessage(channel: PublicKey, cumulative: number, nonce: number) {
     const prefix = Buffer.from("METERBOX_VOUCHER_V1");
     return Buffer.concat([
@@ -188,5 +195,64 @@ describe("meterbox", () => {
       })
       .signers([payee])
       .rpc();
+  });
+
+  it("allows the payer to top up and change the spending limit", async () => {
+    const open = await openChannel();
+    await program.methods.topUp(new BN(500_000)).accounts({
+      payer: payer.publicKey,
+      channel: open.pda,
+      systemProgram: SystemProgram.programId,
+    }).signers([payer]).rpc();
+    await program.methods.updateSpendingLimit(new BN(1_500_000)).accounts({
+      payer: payer.publicKey,
+      channel: open.pda,
+      systemProgram: SystemProgram.programId,
+    }).signers([payer]).rpc();
+    const account = await program.account.channel.fetch(open.pda);
+    assert.equal(account.deposit.toNumber(), 2_500_000);
+    assert.equal(account.spendingLimit.toNumber(), 1_500_000);
+  });
+
+  it("allows the payer to rotate the agent", async () => {
+    const open = await openChannel();
+    const replacement = Keypair.generate();
+    await program.methods.rotateAgent(replacement.publicKey).accounts({
+      payer: payer.publicKey,
+      channel: open.pda,
+      systemProgram: SystemProgram.programId,
+    }).signers([payer]).rpc();
+    const account = await program.account.channel.fetch(open.pda);
+    assert.equal(account.agent.toBase58(), replacement.publicKey.toBase58());
+  });
+
+  it("stores agent spend rules in a payer-controlled policy PDA", async () => {
+    const open = await openChannel();
+    const policy = derivePolicy(open.pda);
+    await program.methods.setAgentPolicy(new BN(100_000), new BN(900_000)).accounts({
+      payer: payer.publicKey,
+      channel: open.pda,
+      policy,
+      systemProgram: SystemProgram.programId,
+    }).signers([payer]).rpc();
+    const account = await program.account.agentPolicy.fetch(policy);
+    assert.equal(account.maxPerRequest.toNumber(), 100_000);
+    assert.equal(account.dailyLimit.toNumber(), 900_000);
+    await program.methods.closeAgentPolicy().accounts({
+      payer: payer.publicKey,
+      channel: open.pda,
+      policy,
+    }).signers([payer]).rpc();
+  });
+
+  it("lets the payer request close with an on-chain countdown", async () => {
+    const open = await openChannel();
+    await program.methods.requestClose(new BN(120)).accounts({
+      payer: payer.publicKey,
+      channel: open.pda,
+      systemProgram: SystemProgram.programId,
+    }).signers([payer]).rpc();
+    const account = await program.account.channel.fetch(open.pda);
+    assert.ok(account.expiresAt.toNumber() >= Math.floor(Date.now() / 1000) + 60);
   });
 });
