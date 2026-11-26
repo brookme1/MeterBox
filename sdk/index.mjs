@@ -12,6 +12,7 @@ export function createMeterBoxFetch({
   channel,
   baseUrl = "",
   spendingLimitLamports = 0n,
+  onVoucher,
 }) {
   let cumulative = 0n;
   let nonce = 0n;
@@ -53,13 +54,27 @@ export function createMeterBoxFetch({
       signature: b64(signature),
     };
     const header = b64(new TextEncoder().encode(JSON.stringify(payload)));
+    onVoucher?.({
+      cumulative: cumulative.toString(),
+      nonce: nonce.toString(),
+      signature: payload.signature,
+      verified: false,
+    });
     const headers = new Headers(init.headers);
     headers.set("x-meterbox-channel", channel);
     headers.set("x-meterbox-voucher", header);
-    return fetch(url, {
+    const response = await fetch(url, {
       ...init,
       headers,
     });
+    onVoucher?.({
+      cumulative: cumulative.toString(),
+      nonce: nonce.toString(),
+      signature: payload.signature,
+      verified: response.ok,
+      status: response.status,
+    });
+    return response;
   };
 }
 

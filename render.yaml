@@ -1,9 +1,27 @@
 services:
   - type: web
-    name: meterbox
+    name: meterbox-api
     runtime: node
-    buildCommand: npm ci && npm run build
-    startCommand: npm start
+    plan: starter
+    buildCommand: corepack pnpm install --frozen-lockfile && corepack pnpm build
+    startCommand: corepack pnpm start
+    healthCheckPath: /api/health
+    disk:
+      name: meterbox-state
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
+      - key: SOLANA_MODE
+        value: devnet
+      - key: SOLANA_RPC_URL
+        value: https://api.devnet.solana.com
+      - key: METERBOX_DB_PATH
+        value: /var/data/meterbox.sqlite
+      - key: CLIENT_ORIGIN
+        sync: false
+      - key: PROVIDER_KEYPAIR_BASE58
+        sync: false
+      - key: PROVIDER_ADMIN_TOKEN
+        generateValue: true

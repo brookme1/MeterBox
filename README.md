@@ -1,114 +1,114 @@
 # MeterBox
 
-Payment infrastructure for autonomous AI agents on Solana.
+MeterBox is an HTTP 402 payment rail for autonomous agents. Agents pay for API
+requests with locally signed cumulative Ed25519 vouchers; the provider verifies
+each voucher off-chain and settles the cumulative value on Solana in one
+transaction.
 
-AI agents cannot rely on cards for machine-to-machine API payments. Direct on-chain payments are slow and expensive for every call. MeterBox combines HTTP 402 paywalls with signed cumulative Ed25519 vouchers and one final Anchor settlement.
+**Five paid requests can net into one settlement transaction.** Channels use
+SOL on Solana devnet and are funded and managed by the payer wallet.
 
-## How it works
+## Product
 
-```mermaid
-sequenceDiagram
-  participant Agent
-  participant API
-  participant Program
-  Agent->>API: Paid API request
-  API-->>Agent: 402 + price and accepted state
-  Agent->>Agent: Sign cumulative voucher
-  Agent->>API: Retry with voucher
-  API->>API: Verify Ed25519 signature
-  API-->>Agent: 200 response
-  Provider->>Program: Ed25519 instruction + settle
-  Program->>Program: Verify agent signature and voucher
-  Program->>Payee: Transfer cumulative delta
-```
+- Landing page explains the 402 request → voucher → response → settlement flow.
+- Payer dashboard opens and manages channels, updates limits, rotates agent
+  keys, configures agent policy, and requests/finalizes channel close.
+- Provider dashboard shows revenue, outstanding balances, request mix, channel
+  status, and signed-message-protected endpoint pricing.
+- Playground opens a real wallet-signed devnet channel, generates a temporary
+  browser agent key, runs five signed requests, and settles through the
+  server-side provider keypair.
+- Docs cover the voucher format and security model.
+- SQLite stores API state and endpoint pricing. On devnet startup the API
+  reconciles open channel account data from the program.
 
-## Quickstart
+## Deployment
+
+- Program ID: [`Ga2tqUHwpZBCK26AJjcYsUoA4JtLzuRmMZkn72WdR1jz`](https://explorer.solana.com/address/Ga2tqUHwpZBCK26AJjcYsUoA4JtLzuRmMZkn72WdR1jz?cluster=devnet)
+- Repository: https://github.com/brookme1/MeterBox
+- Live frontend/API URL: not deployed by this change; deployment CLI/auth was unavailable.
+- The program ID above is the existing devnet deployment. The new channel
+  management instructions still require an upgrade deployment before those
+  instructions can run against devnet.
+
+See [DEPLOY.md](./DEPLOY.md) for exact Vercel/Render setup steps and the
+required persistent disk and server-only secrets.
+
+## Screenshots
+
+Captured from the local **demo-mode** UI; they do not represent a completed
+devnet browser-wallet session.
+
+| Page | Screenshot |
+| --- | --- |
+| Landing | [landing.png](./docs/screenshots/landing.png) |
+| Payer dashboard | [payer.png](./docs/screenshots/payer.png) |
+| Provider dashboard | [provider.png](./docs/screenshots/provider.png) |
+| Playground | [playground.png](./docs/screenshots/playground.png) |
+| Docs | [docs.png](./docs/screenshots/docs.png) |
+| Mobile payer | [payer-mobile.png](./docs/screenshots/payer-mobile.png) |
+| Mobile playground | [playground-mobile.png](./docs/screenshots/playground-mobile.png) |
+
+## Local setup
+
+Run all Node, Anchor, Solana, and Rust commands in WSL Ubuntu, in the Linux
+checkout (`~/MeterBox`), not from PowerShell or `/mnt/c`.
 
 ```bash
 corepack pnpm@9.15.9 install
-corepack pnpm@9.15.9 test
 cp .env.example .env
+corepack pnpm@9.15.9 build
+corepack pnpm@9.15.9 test
 corepack pnpm@9.15.9 dev
 ```
 
-Open `http://localhost:5173`.
+Open `http://localhost:5173`. Demo mode is explicit and does not create real
+on-chain settlements. To use the wallet flows, configure the API for devnet
+and set `PROVIDER_KEYPAIR_PATH` or `PROVIDER_KEYPAIR_BASE58` on the server only.
+Do not expose provider key material or `PROVIDER_ADMIN_TOKEN` through a
+`VITE_*` variable.
 
-Production:
-
-```bash
-corepack pnpm@9.15.9 build
-npm start
-```
-
-## Modes
-
-- `SOLANA_MODE=demo`: no wallet or keypair is required. The UI clearly shows DEMO MODE.
-- `SOLANA_MODE=devnet`: configure the RPC, program ID, and provider keypair. The current environment must have a deployed program and provider keypair.
-
-## SDK
-
-Agent:
+## SDK quickstart
 
 ```js
-import { createMeterBoxFetch } from "meterbox-sdk";
-const mbFetch = createMeterBoxFetch({
+import nacl from "tweetnacl";
+import { createMeterBoxFetch } from "./sdk/index.mjs";
+
+const agentKeypair = nacl.sign.keyPair();
+const paidFetch = createMeterBoxFetch({
   agentKeypair,
-  channel,
+  channel: "<channel-pda>",
   baseUrl: "http://localhost:8787",
   spendingLimitLamports: 1_750_000,
 });
-await mbFetch("/api/paid/weather");
+const response = await paidFetch("/api/paid/weather");
 ```
 
-Provider:
+Providers can use the shared `buildVoucherMessage` format from
+`shared/voucher.mjs`; the API example demonstrates voucher verification,
+receipts, persistence, and provider-side settlement.
 
-```js
-import { meterbox } from "meterbox-sdk";
-app.get("/weather", meterbox.charge(100_000), handler);
-```
+## Voucher and security model
 
-## Solana
+The signed message is
+`METERBOX_VOUCHER_V1 || programId || channel || payee || cumulativeLamports || nonce`.
+Public keys are 32 bytes; cumulative and nonce are unsigned 64-bit little-endian
+values. Each request's detached signature uses the agent's Ed25519 key.
 
-- Program ID: `Ga2tqUHwpZBCK26AJjcYsUoA4JtLzuRmMZkn72WdR1jz`
-- Explorer: https://explorer.solana.com/address/Ga2tqUHwpZBCK26AJjcYsUoA4JtLzuRmMZkn72WdR1jz?cluster=devnet
-- Devnet status: **deployed and verified**.
-- Deploy transaction: https://explorer.solana.com/tx/2P5Xv7bu93MNhGmQPRryCpYocpECQy1KCy9Tkm283n2nCQjgJEnY3f1ukFS3pQPenbHgVhNv3GJTiCjogo855Wp7?cluster=devnet
-- Verified five-call run (weather, sentiment, price, search, image; 1,750,000 lamports):
-  - Open: https://explorer.solana.com/tx/3Rrot9MFcvMrifYRUDWpUKR2V4Mdk1nmJbMf3U974MPqYZpTGkRAkBGyG5uwKv4n1psYBd2pj9WNkdgNMn9CDLMB?cluster=devnet
-  - Channel (closed after settlement): https://explorer.solana.com/address/A2agETbFZQxePbvXpFJMX3tm8ZFjACNX9W4MhjUUVj9i?cluster=devnet
-  - Settle (Ed25519 verification + MeterBox): https://explorer.solana.com/tx/3RbyDkM1MbBpLWM9acYdFsjNhy5Q9eJotQAu5SssunztmLZTMcYCWGo1zCuyEjMXhgRjJXBfVueftPGJZ7GYyBmT?cluster=devnet
-  - Close/refund: https://explorer.solana.com/tx/3YxkM6edXEf3SvzAodNFE2uvPNc3dZA6ssziWNTr1eyY63mqeLtozf8zUsKbgztxjvuXFbQgwsjB6NzEbBUvAbrL?cluster=devnet
-- Program source: `programs/meterbox/src/lib.rs`
+The Anchor program validates the Ed25519 instruction and exact voucher message
+before settling. The payer wallet signs channel creation and management.
+Provider signing material remains server-side; API pricing updates require a
+message signed by the configured provider wallet. Playground-generated agent
+keys are demo-only and remain in browser memory. Use devnet, not production
+funds.
 
-The deployment keypair stays local and is git-ignored. The program is deployed to devnet at the program ID above.
-
-Deploy:
+## Tests
 
 ```bash
-corepack pnpm@9.15.9 program:deploy
+corepack pnpm@9.15.9 test
+anchor test
 ```
 
-## Security model
-
-The server verifies vouchers off-chain before returning API data. The Anchor settle instruction also verifies the previous Ed25519 instruction, the channel agent, the exact cumulative voucher message, nonce, limits, and rent-exempt minimum. Cooperative close is available to the payee; payer close is available after expiry.
-
-## Honest limitations
-
-- SOL channels only.
-- The browser demo agent key is held in memory.
-- Demo settlement is intentionally not an on-chain transaction.
-- Devnet deploy and real wallet/close flows require the Solana/Anchor toolchain and funded wallet.
-- The provider currently supports one payee per channel.
-
-## Devnet demo
-
-```bash
-SOLANA_MODE=devnet PROVIDER_KEYPAIR_PATH="$HOME/.config/solana/id.json" corepack pnpm@9.15.9 dev
-SOLANA_MODE=devnet PROVIDER_KEYPAIR_PATH="$HOME/.config/solana/id.json" corepack pnpm@9.15.9 demo:agent
-```
-
-The CLI flow opens a devnet channel, makes five signed paid API requests, settles the cumulative voucher, and closes the channel. The browser playground is read-only in devnet mode; its channel operations are available in demo mode.
-
-## License
-
-MIT
+The Node suite covers API and SDK behavior, including replay, tampering, forged
+signatures, and spending limits. Anchor integration tests cover valid and
+rejected settlements plus payer channel management.
