@@ -1,113 +1,337 @@
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import nacl from "tweetnacl";
-import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from "recharts";
-import { deriveChannelPda, ENDPOINTS, PROGRAM_ID } from "../../shared/voucher.mjs";
-import { createMeterBoxFetch } from "../../sdk/index.mjs";
+import { PublicKey } from "@solana/web3.js";
+import { PROGRAM_ID } from "../../shared/voucher.mjs";
+import {
+  channelAddress,
+  closeChannelInstruction,
+  manageInstruction,
+  nextChannelId,
+  openChannelInstruction,
+  policyInstruction,
+  submitTransaction,
+} from "./lib/chain.mjs";
+import { base64, solToLamports } from "./lib/format.mjs";
 
-const views = ["Playground", "Payer", "Provider", "Docs"];
-const payer = "11111111111111111111111111111111";
-const payee = "11111111111111111111111111111112";
-const channelId = 1;
-const channelPda = deriveChannelPda(payer, payee, channelId, PROGRAM_ID);
-const b64 = (bytes) => Buffer.from(bytes).toString("base64");
+const LandingPage = lazy(() => import("./pages/LandingPage.jsx"));
+const PayerPage = lazy(() => import("./pages/PayerPage.jsx"));
+const ProviderPage = lazy(() => import("./pages/ProviderPage.jsx"));
+const PlaygroundPage = lazy(() => import("./pages/PlaygroundPage.jsx"));
+const DocsPage = lazy(() => import("./pages/DocsPage.jsx"));
 
-export default function App() {
-  const [view, setView] = useState("Playground");
-  const keys = useMemo(() => nacl.sign.keyPair(), []);
-  const [logs, setLogs] = useState([]);
-  const [rows, setRows] = useState([]);
-  const [state, setState] = useState(null);
-  const [health, setHealth] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [toast, setToast] = useState("");
+const apiBase = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+const routes = {
+  "/": { name: "Overview", page: LandingPage },
+  "/app/payer": { name: "Payer", page: PayerPage },
+  "/app/provider": { name: "Provider", page: ProviderPage },
+  "/app/playground": { name: "Playground", page: PlaygroundPage },
+  "/docs": { name: "Docs", page: DocsPage },
+};
 
-  const log = (text, kind = "info") => setLogs((v) => [...v, { text, kind }]);
+async function request(path, options) {
+  const response = await fetch(`${apiBase}${path}`, options);
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || `API request failed (${response.status})`);
+  return body;
+}
 
-  async function refresh() {
-    const r = await fetch(`/api/state?channel=${channelPda}`);
-    setState(r.ok ? await r.json() : null);
-  }
-
+function usePath() {
+  const [path, setPath] = useState(() => routes[window.location.pathname] ? window.location.pathname : "/");
   useEffect(() => {
-    fetch("/api/health").then((r) => r.json()).then(setHealth).catch(() => {});
-    refresh();
-    const events = new EventSource("/api/events");
-    events.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      setState(data.channels?.[channelPda] || null);
-    };
-    return () => events.close();
+    const change = () => setPath(routes[window.location.pathname] ? window.location.pathname : "/");
+    window.addEventListener("popstate", change);
+    return () => window.removeEventListener("popstate", change);
+  }, []);
+  const navigate = useCallback((next) => {
+    if (!routes[next]) return;
+    window.history.pushState(null, "", next);
+    setPath(next);
+  }, []);
+  return [path, navigate];
+}
+
+export default function App({ wallet, walletButton }) {
+  const [path, navigate] = usePath();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [health, setHealth] = useState(null);
+  const [channels, setChannels] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [agentKeys, setAgentKeys] = useState({});
+  const [updated, setUpdated] = useState("");
+  const current = routes[path];
+  const modeName = (health?.mode || "loading").toUpperCase();
+
+  const refresh = useCallback(async () => {
+    setLoadError("");
+    try {
+      const [healthResult, stateResult] = await Promise.all([
+        request("/api/config"),
+        request("/api/state"),
+      ]);
+      setHealth(healthResult);
+      setChannels(Object.values(stateResult.channels || {}).reverse());
+      setUpdated(new Date().toLocaleTimeString());
+    } catch (error) {
+      setLoadError(error.message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  async function openChannel() {
-    const r = await fetch("/api/channels", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        channelPda,
-        agentPublicKey: b64(keys.publicKey),
-        payer,
-        payee,
-        channelId,
-        deposit: "100000000",
-        spendingLimit: "1750000",
-      }),
-    });
-    if (!r.ok) throw new Error(await r.text());
-    log("Channel registered", "ok");
-    await refresh();
-  }
-
-  async function runAgent() {
-    setBusy(true);
-    setLogs([]);
-    setRows([]);
+  useEffect(() => {
+    refresh();
+    const timer = window.setInterval(refresh, 15_000);
+    let events;
     try {
-      await openChannel();
-      const mbFetch = createMeterBoxFetch({
-        agentKeypair: keys,
-        channel: channelPda,
-        baseUrl: "",
-        spendingLimitLamports: 1_750_000,
-      });
-      let cumulative = 0n;
-      let nonce = 0n;
-      for (const ep of ENDPOINTS) {
-        const url = ep.path + (ep.name === "weather" ? "?city=Berlin" : ep.name === "price" ? "?symbol=SOL" : "");
-        log(`→ ${url}`, "req");
-        const r = await mbFetch(url);
-        const body = await r.json();
-        log(`← ${r.status} ${ep.name}`, r.ok ? "ok" : "warn");
-        if (r.ok) {
-          cumulative = BigInt(state?.lastCumulative || 0) + BigInt(ep.price);
-          nonce += 1n;
-          setRows((v) => [...v, { nonce: nonce.toString(), api: ep.name, cumulative: cumulative.toString(), status: "VERIFIED" }]);
-        } else if (body.error) {
-          log(body.error, "warn");
+      events = new EventSource(`${apiBase}/api/events`);
+      events.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        setChannels(Object.values(data.channels || {}).reverse());
+        setUpdated(new Date().toLocaleTimeString());
+      };
+      events.onerror = () => setLoadError("Live updates are disconnected; retrying automatically.");
+    } catch (error) {
+      setLoadError(`Live updates could not start: ${error.message}`);
+    }
+    return () => {
+      window.clearInterval(timer);
+      events?.close();
+    };
+  }, [refresh]);
+
+  const send = useCallback((instructions) => submitTransaction(wallet, wallet.connection, instructions), [wallet]);
+
+  const openChannel = useCallback(async ({
+    depositSol,
+    spendingLimitSol,
+    agentKeypair,
+    agentPublicKey,
+    maxPerRequestSol,
+    dailyLimitSol,
+    airdrop = false,
+  }) => {
+    if (!wallet.publicKey) throw new Error("Connect Phantom or Solflare first.");
+    const providerAddress = health?.providerPublicKey;
+    if (!providerAddress) throw new Error("The API has no devnet provider wallet configured.");
+    const payer = wallet.publicKey.toBase58();
+    const deposit = BigInt(solToLamports(depositSol));
+    const limit = BigInt(solToLamports(spendingLimitSol));
+    if (deposit <= 0n || limit <= 0n || limit > deposit) throw new Error("The spending limit must be greater than zero and no larger than the deposit.");
+    if (airdrop) {
+      const minimum = Number(deposit) + 10_000_000;
+      const balance = await wallet.connection.getBalance(wallet.publicKey, "confirmed");
+      if (balance < minimum) {
+        try {
+          const airdropSignature = await wallet.connection.requestAirdrop(wallet.publicKey, 1_000_000_000);
+          await wallet.connection.confirmTransaction(airdropSignature, "confirmed");
+          const fundedBalance = await wallet.connection.getBalance(wallet.publicKey, "confirmed");
+          if (fundedBalance < minimum) throw new Error("Airdrop confirmed, but the balance is still below the requested deposit and fee reserve.");
+        } catch (error) {
+          const latestBalance = await wallet.connection.getBalance(wallet.publicKey, "confirmed");
+          if (latestBalance < minimum) {
+            throw new Error(`Devnet faucet did not leave enough balance for this channel. Fund ${payer} at https://faucet.solana.com, then retry. Faucet response: ${error.message}`);
+          }
         }
       }
+    }
+    const keys = agentKeypair || (agentPublicKey ? null : nacl.sign.keyPair());
+    const agent = keys
+      ? new PublicKey(keys.publicKey).toBase58()
+      : new PublicKey(agentPublicKey).toBase58();
+    const agentBytes = keys?.publicKey || new PublicKey(agent).toBytes();
+    const channelId = await nextChannelId(wallet.connection, payer, providerAddress);
+    const channel = channelAddress(payer, providerAddress, channelId);
+    const expiresAt = BigInt(Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60);
+    const instructions = [await openChannelInstruction({
+      payer,
+      payee: providerAddress,
+      channel,
+      channelId,
+      agent,
+      deposit,
+      limit,
+      expiresAt,
+    })];
+    if (maxPerRequestSol && dailyLimitSol) {
+      const maxPerRequest = BigInt(solToLamports(maxPerRequestSol));
+      const dailyLimit = BigInt(solToLamports(dailyLimitSol));
+      if (maxPerRequest <= 0n || maxPerRequest > dailyLimit || dailyLimit > limit) {
+        throw new Error("Agent limits must satisfy max per request ≤ daily limit ≤ channel spending limit.");
+      }
+      instructions.push(await policyInstruction({ payer, channel, maxPerRequest, dailyLimit }));
+    }
+    const signature = await send(instructions);
+    if (keys) setAgentKeys((previous) => ({ ...previous, [channel]: keys }));
+    try {
+      await request("/api/channels", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          channelPda: channel,
+          agentPublicKey: base64(agentBytes),
+          payer,
+          payee: providerAddress,
+          channelId: channelId.toString(),
+          deposit: deposit.toString(),
+          spendingLimit: limit.toString(),
+        }),
+      });
+    } catch (error) {
       await refresh();
-    } catch (e) {
-      log(String(e.message || e), "warn");
-    } finally {
-      setBusy(false);
+      throw new Error(`Channel transaction confirmed (${signature}), but provider registration failed: ${error.message}`);
     }
-  }
-
-  async function settle() {
-    const r = await fetch(`/api/channels/${channelPda}/settle`, {
-      method: "POST",
-      headers: { "x-meterbox-admin-token": import.meta.env.VITE_PROVIDER_ADMIN_TOKEN || "" },
-    });
-    const body = await r.json();
-    if (!r.ok) {
-      log(body.error || "Settle failed", "warn");
-      return;
-    }
-    setRows((v) => v.map((row) => ({ ...row, status: "SETTLED" })));
-    setToast(body.mode === "demo" ? "Settlement recorded in demo mode" : `Explorer: ${body.explorerUrl || ""}`);
     await refresh();
-  }
+    return { channel, channelId: channelId.toString(), agentKeypair: keys, agentPublicKey: agent, signature, providerAddress };
+  }, [health, refresh, send, wallet]);
+
+  const manageChannel = useCallback(async (name, channel, value) => {
+    const signature = await send([await manageInstruction(name, {
+      payer: wallet.publicKey.toBase58(),
+      channel,
+      value,
+    })]);
+    await request(`/api/channels/${channel}/sync`, { method: "POST" });
+    await refresh();
+    return signature;
+  }, [refresh, send, wallet.publicKey]);
+
+  const registerAgent = useCallback(async (channel, agentPublicKey) => {
+    await request(`/api/channels/${channel}/agent`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ agentPublicKey }),
+    });
+    await refresh();
+  }, [refresh]);
+
+  const rotateAgent = useCallback(async (channel) => {
+    const pair = nacl.sign.keyPair();
+    const agent = new PublicKey(pair.publicKey).toBase58();
+    const signature = await send([await manageInstruction("rotate_agent", {
+      payer: wallet.publicKey.toBase58(),
+      channel,
+      value: agent,
+    })]);
+    await request(`/api/channels/${channel}/agent`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ agentPublicKey: base64(pair.publicKey) }),
+    });
+    setAgentKeys((previous) => ({ ...previous, [channel]: pair }));
+    await refresh();
+    return signature;
+  }, [refresh, send, wallet.publicKey]);
+
+  const closeChannel = useCallback(async (channel) => {
+    const signature = await send([await closeChannelInstruction({
+      payer: wallet.publicKey.toBase58(),
+      channel,
+    })]);
+    try {
+      await request(`/api/channels/${channel}/closed`, { method: "POST" });
+    } catch (error) {
+      throw new Error(`Close transaction confirmed (${signature}), but channel state sync failed: ${error.message}`);
+    }
+    await refresh();
+    return signature;
+  }, [refresh, send, wallet.publicKey]);
+
+  const settleChannel = useCallback(async (channel) => {
+    const selected = channels.find((item) => item.channelPda === channel);
+    if (!selected) throw new Error("Channel state is not loaded.");
+    if (!wallet.publicKey || !wallet.signMessage) throw new Error("Connect the payer or provider wallet to approve settlement.");
+    const publicKey = wallet.publicKey.toBase58();
+    if (publicKey !== selected.payer && publicKey !== selected.payee) {
+      throw new Error("Connect this channel's payer or provider wallet to approve settlement.");
+    }
+    const message = new TextEncoder().encode(
+      `METERBOX_SETTLE_REQUEST_V1:${channel}:${selected.lastNonce}:${selected.lastCumulative}`,
+    );
+    const signature = await wallet.signMessage(message);
+    const result = await request(`/api/public/channels/${channel}/settle`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ publicKey, signature: base64(signature) }),
+    });
+    await refresh();
+    return result;
+  }, [channels, refresh, wallet.publicKey, wallet.signMessage]);
+
+  const setAgentPolicy = useCallback(async (channel, maxPerRequestSol, dailyLimitSol) => {
+    const signature = await send([await policyInstruction({
+      payer: wallet.publicKey.toBase58(),
+      channel,
+      maxPerRequest: BigInt(solToLamports(maxPerRequestSol)),
+      dailyLimit: BigInt(solToLamports(dailyLimitSol)),
+    })]);
+    await request(`/api/channels/${channel}/sync`, { method: "POST" });
+    await refresh();
+    return signature;
+  }, [refresh, send, wallet.publicKey]);
+
+  const savePricing = useCallback(async (prices) => {
+    if (!wallet.publicKey || !wallet.signMessage) throw new Error("Connect a wallet that supports signed messages.");
+    if (wallet.publicKey.toBase58() !== health?.providerPublicKey) {
+      throw new Error("Connect the configured provider wallet before editing endpoint prices.");
+    }
+    const canonicalPrices = {};
+    for (const endpoint of health.endpoints) canonicalPrices[endpoint.name] = solToLamports(prices[endpoint.name]);
+    const message = new TextEncoder().encode(`METERBOX_PRICING_V1:${JSON.stringify(canonicalPrices)}`);
+    const signature = await wallet.signMessage(message);
+    const result = await request("/api/pricing", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        prices: canonicalPrices,
+        signature: base64(signature),
+        publicKey: wallet.publicKey.toBase58(),
+      }),
+    });
+    await refresh();
+    return result;
+  }, [health, refresh, wallet.publicKey, wallet.signMessage]);
+
+  const topUpChannel = useCallback(async (channel, amountSol) => {
+    const signature = await send([await manageInstruction("top_up", {
+      payer: wallet.publicKey.toBase58(),
+      channel,
+      value: BigInt(solToLamports(amountSol)),
+    })]);
+    await request(`/api/channels/${channel}/sync`, { method: "POST" });
+    await refresh();
+    return signature;
+  }, [refresh, send, wallet.publicKey]);
+
+  const closeHostedChannel = useCallback(async (channel) => {
+    const result = await request(`/api/channels/${channel}/close`, { method: "POST" });
+    await refresh();
+    return result;
+  }, [refresh]);
+
+  const Page = current.page;
+  const pageProps = useMemo(() => ({
+    wallet,
+    walletButton,
+    health,
+    channels,
+    loading,
+    loadError,
+    updated,
+    openChannel,
+    manageChannel,
+    registerAgent,
+    rotateAgent,
+    closeChannel,
+    settleChannel,
+    setAgentPolicy,
+    savePricing,
+    topUpChannel,
+    closeHostedChannel,
+    agentKeys,
+    refresh,
+    navigate,
+  }), [wallet, walletButton, health, channels, loading, loadError, updated, openChannel, manageChannel, registerAgent, rotateAgent, closeChannel, settleChannel, setAgentPolicy, savePricing, topUpChannel, closeHostedChannel, agentKeys, refresh, navigate]);
 
   const endpointData = (state?.calls || []).reduce((out, call) => {
     const found = out.find((v) => v.name === call.name);
@@ -117,71 +341,36 @@ export default function App() {
   }, []);
 
   return (
-    <div className="app">
-      <nav className="side">
-        <div className="brand"><span className="brand-mark">M</span> MeterBox</div>
-        {views.map((v) => <button key={v} className={view === v ? "active" : ""} onClick={() => setView(v)}>{v}</button>)}
-      </nav>
-      <main>
+    <div className="app-shell">
+      <button className="mobile-menu" onClick={() => setSidebarOpen((open) => !open)} aria-label="Toggle navigation">☰</button>
+      <aside className={`sidebar ${sidebarOpen ? "sidebar-open" : ""}`}>
+        <button className="brand" onClick={() => { navigate("/"); setSidebarOpen(false); }}>
+          <span className="brand-mark">M</span><span>meterbox</span><span className="brand-beta">{modeName}</span>
+        </button>
+        <div className="nav-caption">WORKSPACE</div>
+        {Object.entries(routes).map(([route, item]) => (
+          <button key={route} className={`nav-item ${path === route ? "selected" : ""}`} onClick={() => { navigate(route); setSidebarOpen(false); }}>
+            <span className={`nav-dot ${path === route ? "dot-active" : ""}`} />{item.name}
+          </button>
+        ))}
+        <div className="sidebar-bottom">
+          <div className="network-status"><span className="live-dot" /> Solana {health?.mode || "network"}</div>
+          {walletButton}
+          <div className="sidebar-footer">5 API calls · 1 settlement</div>
+        </div>
+      </aside>
+      <main className="main-content">
         <header className="topbar">
-          <div>
-            <span className="eyebrow">SOLANA DEVNET</span>
-            <span className="pill mode">{health?.mode === "demo" || health?.mode == null ? "DEMO MODE" : "DEVNET"}</span>
+          <div className="breadcrumb"><span>MeterBox</span><span className="crumb-slash">/</span><strong>{current.name}</strong></div>
+          <div className="topbar-right">
+            <span className="network-chip"><span className="live-dot" /> {modeName}</span>
+            <span className="updated-note">{updated ? `Updated ${updated}` : "Connecting…"}</span>
           </div>
-          {toast && <button className="toast" onClick={() => setToast("")}>{toast} ×</button>}
         </header>
-        {view === "Playground" && (
-          <>
-            <h1>Playground</h1>
-            <p className="muted">Signed cumulative vouchers settle at the end of the session.</p>
-            <div className="row">
-              <button className="btn" onClick={openChannel}>Register channel</button>
-              <button className="btn primary" disabled={busy} onClick={runAgent}>{busy ? "Running…" : "Run AI agent"}</button>
-              <button className="btn" onClick={settle}>Settle</button>
-            </div>
-            <div className="cols">
-              <section className="panel log mono">{logs.length === 0 ? <p className="muted">HTTP log is empty.</p> : logs.map((l, i) => <div key={i} className={l.kind}>{l.text}</div>)}</section>
-              <section className="panel table-panel">
-                <table><thead><tr><th>#</th><th>API</th><th>Σ lamports</th><th>Status</th></tr></thead>
-                  <tbody>{rows.map((r) => <tr key={r.nonce}><td className="mono">{r.nonce}</td><td>{r.api}</td><td className="mono">{r.cumulative}</td><td><span className={r.status === "SETTLED" ? "pill settled" : "pill"}>{r.status}</span></td></tr>)}</tbody>
-                </table>
-              </section>
-            </div>
-          </>
-        )}
-        {view === "Payer" && (
-          <>
-            <h1>Payer</h1>
-            <div className="grid">
-              <div className="card"><div className="muted">Channel</div><div className="mono copy">{channelPda}</div></div>
-              <div className="card"><div className="muted">Deposit</div><div className="mono">{state?.deposit || "100000000"}</div></div>
-              <div className="card"><div className="muted">Spent</div><div className="mono">{state?.lastCumulative || "0"}</div></div>
-              <div className="card"><div className="muted">Limit</div><div className="mono">{state?.spendingLimit || "1750000"}</div></div>
-            </div>
-          </>
-        )}
-        {view === "Provider" && (
-          <>
-            <h1>Provider</h1>
-            <div className="grid">
-              <div className="card"><div className="muted">Settled</div><div className="mono">{state?.settled || "0"}</div></div>
-              <div className="card"><div className="muted">Unsettled</div><div className="mono">{state?.unsettled || "0"}</div></div>
-              <button className="btn primary" onClick={settle}>Settle channel</button>
-            </div>
-            <section className="panel chart"><ResponsiveContainer width="100%" height={220}><BarChart data={endpointData}><XAxis dataKey="name" /><YAxis /><Bar dataKey="value" fill="#9945FF" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></section>
-          </>
-        )}
-        {view === "Docs" && (
-          <>
-            <h1>Docs</h1>
-            <section className="panel docs">
-              <h2>Agent</h2><pre>{`const mb = createMeterBoxFetch({ agentKeypair, channel, baseUrl, spendingLimitLamports })\nawait mb("/api/paid/weather")`}</pre>
-              <h2>Provider</h2><pre>{`app.get("/weather", meterbox.charge(100_000), handler)`}</pre>
-              <h2>Flow</h2><p>Request → 402 → Ed25519 signed cumulative voucher → 200 → one settlement transaction.</p>
-              <h2>Security</h2><p>The on-chain program verifies the Ed25519 instruction, agent public key, channel PDA, payee, cumulative amount, and nonce.</p>
-            </section>
-          </>
-        )}
+        {(loadError && !loading) && <div className="banner banner-error" role="alert">{loadError}<button onClick={refresh}>Retry</button></div>}
+        <Suspense fallback={<div className="page-loading"><span className="spinner" /> Loading page…</div>}>
+          <Page {...pageProps} programId={health?.programId || PROGRAM_ID} />
+        </Suspense>
       </main>
     </div>
   );

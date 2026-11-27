@@ -1,0 +1,7 @@
+{
+  "buildCommand": "corepack pnpm install --frozen-lockfile && corepack pnpm build",
+  "outputDirectory": "client/dist",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

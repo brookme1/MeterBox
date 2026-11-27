@@ -7,7 +7,7 @@ use anchor_lang::solana_program::{
     },
 };
 
-declare_id!("4CoXFP5uD1nxZwXqX7ws49nyaYnAEjPVE9GgWVmcQ865");
+declare_id!("2Nre79jBBYUmsZHLqjRTtouyjzBuyE9d8ciB6fPPqVpP");
 
 pub const VOUCHER_PREFIX: &[u8] = b"METERBOX_VOUCHER_V1";
 
@@ -29,6 +29,32 @@ pub mod meterbox {
             expires_at > Clock::get()?.unix_timestamp,
             MeterboxError::InvalidExpiry
         );
+        let sequence = &mut ctx.accounts.channel_sequence;
+        if sequence.payer == Pubkey::default() {
+            sequence.payer = ctx.accounts.payer.key();
+            sequence.payee = ctx.accounts.payee.key();
+            sequence.next_channel_id = 1;
+            sequence.bump = ctx.bumps.channel_sequence;
+        }
+        require_keys_eq!(
+            sequence.payer,
+            ctx.accounts.payer.key(),
+            MeterboxError::InvalidChannelSequence
+        );
+        require_keys_eq!(
+            sequence.payee,
+            ctx.accounts.payee.key(),
+            MeterboxError::InvalidChannelSequence
+        );
+        require!(
+            channel_id == sequence.next_channel_id,
+            MeterboxError::InvalidChannelSequence
+        );
+        sequence.next_channel_id = sequence
+            .next_channel_id
+            .checked_add(1)
+            .ok_or(MeterboxError::MathOverflow)?;
+
         let channel = &mut ctx.accounts.channel;
         channel.payer = ctx.accounts.payer.key();
         channel.payee = ctx.accounts.payee.key();
@@ -62,13 +88,15 @@ pub mod meterbox {
 
     /// Pay `cumulative - settled` to the payee after verifying the agent voucher.
     pub fn settle(ctx: Context<Settle>, cumulative_amount: u64, nonce: u64) -> Result<()> {
+        let channel_address = ctx.accounts.channel.key();
+        let payee = ctx.accounts.payee.key();
         let channel = &mut ctx.accounts.channel;
         require!(nonce > channel.last_nonce, MeterboxError::NonceTooLow);
         require!(cumulative_amount > channel.settled, MeterboxError::AmountNotIncreasing);
         require!(cumulative_amount <= channel.spending_limit, MeterboxError::ExceedsLimit);
         require!(cumulative_amount <= channel.deposit, MeterboxError::ExceedsDeposit);
 
-        verify_voucher(ctx.accounts.instructions_sysvar.as_ref(), channel, ctx.accounts.payee.key(), cumulative_amount, nonce)?;
+        verify_voucher(ctx.accounts.instructions_sysvar.as_ref(), channel, channel_address, payee, cumulative_amount, nonce)?;
 
         let delta = cumulative_amount
             .checked_sub(channel.settled)
@@ -101,8 +129,111 @@ pub mod meterbox {
         Ok(())
     }
 
+    pub fn top_up(ctx: Context<ManageChannel>, amount: u64) -> Result<()> {
+        require!(amount > 0, MeterboxError::InvalidTopUp);
+        let channel = &mut ctx.accounts.channel;
+        channel.deposit = channel
+            .deposit
+            .checked_add(amount)
+            .ok_or(MeterboxError::MathOverflow)?;
+        let cpi = CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            anchor_lang::system_program::Transfer {
+                from: ctx.accounts.payer.to_account_info(),
+                to: channel.to_account_info(),
+            },
+        );
+        anchor_lang::system_program::transfer(cpi, amount)?;
+        emit!(ChannelToppedUp {
+            channel: channel.key(),
+            amount,
+            deposit: channel.deposit,
+        });
+        Ok(())
+    }
+
+    pub fn update_spending_limit(
+        ctx: Context<ManageChannel>,
+        spending_limit: u64,
+    ) -> Result<()> {
+        let channel = &mut ctx.accounts.channel;
+        require!(spending_limit <= channel.deposit, MeterboxError::ExceedsDeposit);
+        require!(spending_limit >= channel.settled, MeterboxError::ExceedsLimit);
+        channel.spending_limit = spending_limit;
+        emit!(SpendingLimitUpdated {
+            channel: channel.key(),
+            spending_limit,
+        });
+        Ok(())
+    }
+
+    pub fn rotate_agent(ctx: Context<ManageChannel>, agent: Pubkey) -> Result<()> {
+        require!(agent != Pubkey::default(), MeterboxError::InvalidAgent);
+        let channel = &mut ctx.accounts.channel;
+        let previous_agent = channel.agent;
+        channel.agent = agent;
+        emit!(AgentRotated {
+            channel: channel.key(),
+            previous_agent,
+            agent,
+        });
+        Ok(())
+    }
+
+    pub fn request_close(ctx: Context<ManageChannel>, dispute_window: i64) -> Result<()> {
+        require!(
+            (60..=2_592_000).contains(&dispute_window),
+            MeterboxError::InvalidCloseWindow
+        );
+        let channel = &mut ctx.accounts.channel;
+        channel.expires_at = Clock::get()?
+            .unix_timestamp
+            .checked_add(dispute_window)
+            .ok_or(MeterboxError::MathOverflow)?;
+        emit!(CloseRequested {
+            channel: channel.key(),
+            expires_at: channel.expires_at,
+        });
+        Ok(())
+    }
+
+    pub fn set_agent_policy(
+        ctx: Context<SetAgentPolicy>,
+        max_per_request: u64,
+        daily_limit: u64,
+    ) -> Result<()> {
+        let channel = &ctx.accounts.channel;
+        require!(max_per_request > 0, MeterboxError::InvalidAgentPolicy);
+        require!(max_per_request <= daily_limit, MeterboxError::InvalidAgentPolicy);
+        require!(daily_limit <= channel.spending_limit, MeterboxError::InvalidAgentPolicy);
+        let policy = &mut ctx.accounts.policy;
+        policy.channel = channel.key();
+        policy.payer = channel.payer;
+        policy.max_per_request = max_per_request;
+        policy.daily_limit = daily_limit;
+        policy.bump = ctx.bumps.policy;
+        emit!(AgentPolicyUpdated {
+            channel: channel.key(),
+            max_per_request,
+            daily_limit,
+        });
+        Ok(())
+    }
+
+    pub fn close_agent_policy(ctx: Context<CloseAgentPolicy>) -> Result<()> {
+        emit!(AgentPolicyClosed {
+            channel: ctx.accounts.channel.key(),
+        });
+        Ok(())
+    }
+
     pub fn close_channel(ctx: Context<CloseChannel>) -> Result<()> {
         let channel = &ctx.accounts.channel;
+        require_keys_eq!(
+            ctx.accounts.payer.key(),
+            channel.payer,
+            MeterboxError::InvalidCloseDestination
+        );
         let clock = Clock::get()?;
         let cooperative = ctx.accounts.payee_signer.is_some()
             && ctx.accounts.payee_signer.as_ref().unwrap().key() == channel.payee;
@@ -126,6 +257,7 @@ pub mod meterbox {
 fn verify_voucher(
     instructions: &AccountInfo,
     channel: &Channel,
+    channel_address: Pubkey,
     payee: Pubkey,
     cumulative_amount: u64,
     nonce: u64,
@@ -164,7 +296,7 @@ fn verify_voucher(
     let mut expected = Vec::with_capacity(19 + 32 + 32 + 32 + 8 + 8);
     expected.extend_from_slice(VOUCHER_PREFIX);
     expected.extend_from_slice(crate::ID.as_ref());
-    expected.extend_from_slice(&channel.key().to_bytes());
+    expected.extend_from_slice(&channel_address.to_bytes());
     expected.extend_from_slice(payee.as_ref());
     expected.extend_from_slice(&cumulative_amount.to_le_bytes());
     expected.extend_from_slice(&nonce.to_le_bytes());
@@ -179,6 +311,14 @@ pub struct OpenChannel<'info> {
     pub payer: Signer<'info>,
     /// CHECK: stored payee
     pub payee: UncheckedAccount<'info>,
+    #[account(
+        init_if_needed,
+        payer = payer,
+        space = 8 + 32 + 32 + 8 + 1,
+        seeds = [b"channel-sequence", payer.key().as_ref(), payee.key().as_ref()],
+        bump
+    )]
+    pub channel_sequence: Account<'info, ChannelSequence>,
     #[account(
         init,
         payer = payer,
@@ -208,6 +348,62 @@ pub struct Settle<'info> {
 }
 
 #[derive(Accounts)]
+pub struct ManageChannel<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"channel", channel.payer.as_ref(), channel.payee.as_ref(), &channel.channel_id.to_le_bytes()],
+        bump = channel.bump,
+        has_one = payer
+    )]
+    pub channel: Account<'info, Channel>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct SetAgentPolicy<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(
+        seeds = [b"channel", channel.payer.as_ref(), channel.payee.as_ref(), &channel.channel_id.to_le_bytes()],
+        bump = channel.bump,
+        has_one = payer
+    )]
+    pub channel: Account<'info, Channel>,
+    #[account(
+        init_if_needed,
+        payer = payer,
+        space = 8 + 32 + 32 + 8 + 8 + 1,
+        seeds = [b"policy", channel.key().as_ref()],
+        bump
+    )]
+    pub policy: Account<'info, AgentPolicy>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct CloseAgentPolicy<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(
+        seeds = [b"channel", channel.payer.as_ref(), channel.payee.as_ref(), &channel.channel_id.to_le_bytes()],
+        bump = channel.bump,
+        has_one = payer
+    )]
+    pub channel: Account<'info, Channel>,
+    #[account(
+        mut,
+        close = payer,
+        seeds = [b"policy", channel.key().as_ref()],
+        bump = policy.bump,
+        has_one = payer,
+        has_one = channel
+    )]
+    pub policy: Account<'info, AgentPolicy>,
+}
+
+#[derive(Accounts)]
 pub struct CloseChannel<'info> {
     /// CHECK: Destination receives the channel rent and remaining lamports.
     #[account(mut)]
@@ -234,6 +430,23 @@ pub struct Channel {
     pub settled: u64,
     pub last_nonce: u64,
     pub expires_at: i64,
+    pub bump: u8,
+}
+
+#[account]
+pub struct ChannelSequence {
+    pub payer: Pubkey,
+    pub payee: Pubkey,
+    pub next_channel_id: u64,
+    pub bump: u8,
+}
+
+#[account]
+pub struct AgentPolicy {
+    pub channel: Pubkey,
+    pub payer: Pubkey,
+    pub max_per_request: u64,
+    pub daily_limit: u64,
     pub bump: u8,
 }
 
@@ -271,6 +484,18 @@ pub enum MeterboxError {
     MissingPayer,
     #[msg("Unauthorized close")]
     UnauthorizedClose,
+    #[msg("Top-up amount must be greater than zero")]
+    InvalidTopUp,
+    #[msg("Agent public key cannot be the default key")]
+    InvalidAgent,
+    #[msg("Close dispute window must be between 60 seconds and 30 days")]
+    InvalidCloseWindow,
+    #[msg("Agent policy limits are invalid")]
+    InvalidAgentPolicy,
+    #[msg("Channel ID must be the next unused ID for this payer and payee")]
+    InvalidChannelSequence,
+    #[msg("Channel close destination must be the original payer")]
+    InvalidCloseDestination,
 }
 
 #[event]
@@ -299,6 +524,44 @@ pub struct ChannelClosed {
     pub payee: Pubkey,
 }
 
+#[event]
+pub struct ChannelToppedUp {
+    pub channel: Pubkey,
+    pub amount: u64,
+    pub deposit: u64,
+}
+
+#[event]
+pub struct SpendingLimitUpdated {
+    pub channel: Pubkey,
+    pub spending_limit: u64,
+}
+
+#[event]
+pub struct AgentRotated {
+    pub channel: Pubkey,
+    pub previous_agent: Pubkey,
+    pub agent: Pubkey,
+}
+
+#[event]
+pub struct CloseRequested {
+    pub channel: Pubkey,
+    pub expires_at: i64,
+}
+
+#[event]
+pub struct AgentPolicyUpdated {
+    pub channel: Pubkey,
+    pub max_per_request: u64,
+    pub daily_limit: u64,
+}
+
+#[event]
+pub struct AgentPolicyClosed {
+    pub channel: Pubkey,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -312,6 +575,6 @@ mod tests {
         expected.extend_from_slice(&Pubkey::new_from_array([1u8; 32]).to_bytes());
         expected.extend_from_slice(&1000u64.to_le_bytes());
         expected.extend_from_slice(&2u64.to_le_bytes());
-        assert_eq!(expected.len(), 115);
+        assert_eq!(expected.len(), 131);
     }
 }

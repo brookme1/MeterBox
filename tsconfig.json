@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "types": ["mocha", "node"],
+    "target": "es2020",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  }
+}

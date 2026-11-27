@@ -1,13 +1,13 @@
-import { StrictMode } from "react";
+import { StrictMode, Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
-import { Buffer } from "buffer";
-import App from "./App.jsx";
 import "./styles.css";
 
-globalThis.Buffer = Buffer;
+const WalletApp = lazy(() => import("./WalletApp.jsx"));
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <App />
+    <Suspense fallback={<div className="boot-state">Loading MeterBox…</div>}>
+      <WalletApp />
+    </Suspense>
   </StrictMode>,
 );

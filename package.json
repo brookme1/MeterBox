@@ -11,16 +11,23 @@
     "dev": "concurrently -k \"node server/index.mjs\" \"vite --config client/vite.config.js\"",
     "build": "vite build --config client/vite.config.js",
     "start": "NODE_ENV=production node server/index.mjs",
-    "test": "node --test server/*.test.mjs sdk/*.test.mjs",
+    "test": "node --test server/*.test.mjs sdk/*.test.mjs client/src/lib/*.test.mjs",
     "demo": "npm run dev",
     "demo:reset": "node -e \"fetch('http://127.0.0.1:8787/api/demo/reset',{method:'POST',headers:{'x-meterbox-admin-token':process.env.PROVIDER_ADMIN_TOKEN||''}}).catch(()=>{})\"",
     "demo:agent": "node examples/agent/index.mjs",
-    "program:deploy": "solana config set --url devnet && solana airdrop 2 && anchor build && anchor deploy --provider.cluster devnet"
+    "program:deploy": "anchor build -p meterbox --idl client/src/idl && anchor deploy -p meterbox --provider.cluster devnet --program-keypair \"${METERBOX_PROGRAM_KEYPAIR:?Set METERBOX_PROGRAM_KEYPAIR}\""
   },
   "dependencies": {
-    "@coral-xyz/anchor": "^0.32.1",
+    "@coral-xyz/anchor": "^0.30.1",
+    "@solana/wallet-adapter-base": "^0.9.28",
+    "@solana/wallet-adapter-phantom": "^0.9.30",
+    "@solana/wallet-adapter-react": "^0.15.40",
+    "@solana/wallet-adapter-react-ui": "^0.9.40",
+    "@solana/wallet-adapter-solflare": "^0.6.34",
     "@solana/web3.js": "^1.99.0",
     "better-sqlite3": "^13.2.0",
+    "bs58": "^5.0.0",
+    "bn.js": "^5.2.5",
     "buffer": "^6.0.3",
     "cors": "^2.8.5",
     "express": "^4.21.2",
@@ -29,12 +36,23 @@
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
+    "@types/bn.js": "^5.2.0",
+    "@types/chai": "^5.2.3",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^26.6.6",
     "@vitejs/plugin-react": "^4.3.4",
+    "chai": "^6.3.0",
     "concurrently": "^9.1.2",
+    "mocha": "^11.8.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^2.15.0",
-    "vite": "^6.0.7"
+    "ts-mocha": "^11.1.0",
+    "ts-node": "^10.9.2",
+    "typescript": "5.4.5",
+    "vite": "^6.0.7",
+    "vite-plugin-node-polyfills": "^0.28.0"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "packageManager": "pnpm@9.15.9"
 }

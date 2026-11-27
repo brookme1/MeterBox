@@ -2,12 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import nacl from "tweetnacl";
 import { buildVoucherMessage, deriveChannelPda } from "../shared/voucher.mjs";
+import { PROGRAM_ID } from "../shared/config.mjs";
 
 test("deriveChannelPda matches the Anchor seed layout", () => {
   const payer = "11111111111111111111111111111111";
   const payee = "11111111111111111111111111111112";
-  const program = "4CoXFP5uD1nxZwXqX7ws49nyaYnAEjPVE9GgWVmcQ865";
-  const pda = deriveChannelPda(payer, payee, 7, program);
+  const pda = deriveChannelPda(payer, payee, 7, PROGRAM_ID);
   assert.equal(typeof pda, "string");
   assert.ok(pda.length > 20);
 });
@@ -15,7 +15,7 @@ test("deriveChannelPda matches the Anchor seed layout", () => {
 test("voucher signature verifies with the agent keypair", () => {
   const keys = nacl.sign.keyPair();
   const message = buildVoucherMessage({
-    programId: "4CoXFP5uD1nxZwXqX7ws49nyaYnAEjPVE9GgWVmcQ865",
+    programId: PROGRAM_ID,
     channel: "11111111111111111111111111111111",
     payee: "11111111111111111111111111111112",
     cumulative: 100_000,

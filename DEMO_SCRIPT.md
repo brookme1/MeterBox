@@ -5,7 +5,7 @@ Check the hackathon time limit before recording. The target is 2:30 to 3:00.
 ## Before recording
 
 - Put devnet SOL in the wallet, if using devnet.
-- Run `npm run demo:reset`, then `npm run demo`.
+- Start the app with `corepack pnpm@9.15.9 dev`. For a real flow, run `corepack pnpm@9.15.9 demo:agent` in a second WSL terminal with `SOLANA_MODE=devnet`.
 - Set browser zoom to 110-125%.
 - Close extra tabs and hide bookmarks.
 - Use dark mode. Increase terminal font size.
@@ -30,9 +30,9 @@ Check the hackathon time limit before recording. The target is 2:30 to 3:00.
 
 ### 0:40-1:10 - Open channel
 
-**On screen:** Payer page. Connect the devnet wallet. Set deposit and spending limit. Open the channel.
+**On screen:** Payer dashboard and terminal. The devnet CLI demo opens the channel with the configured provider wallet and spending limit; the browser dashboard is read-only in devnet mode.
 
-**Say:** “I connect a payer wallet and open a channel with a deposit and a spending limit.”
+**Say:** “The CLI opens a devnet channel with a deposit and spending limit.”
 
 **Visible:** Deposit, channel address, and open transaction Explorer link.
 
@@ -40,25 +40,25 @@ Check the hackathon time limit before recording. The target is 2:30 to 3:00.
 
 **On screen:** Terminal on the left. Dashboard on the right.
 
-**Action:** Run `npm run demo:agent`. In demo mode, use the dashboard Run AI agent button too.
+**Action:** Run `corepack pnpm@9.15.9 demo:agent` with `SOLANA_MODE=devnet` to open a real channel, make five signed API calls, settle, and close. In demo mode, use the dashboard Run AI agent button too.
 
-**Say:** “The agent gets weather, sentiment, SOL price, and search. It makes four paid calls and signs one cumulative voucher each time. Only the final result changes on-chain.”
+**Say:** “The agent gets weather, sentiment, SOL price, search results, and image generation. It makes five paid calls and signs one cumulative voucher each time. Only the final result changes on-chain.”
 
 **Visible:** Running cost, HTTP responses, ledger rows, and VERIFIED status.
 
 ### 2:00-2:30 - Settlement
 
-**On screen:** Provider page. Click Settle.
+**On screen:** Terminal settlement result and Solana Explorer transaction.
 
 **Say:** “The program checks the agent signature on-chain, so the provider cannot take more than the agent signed.”
 
-**Visible:** Real settlement transaction and Explorer page with Ed25519 and settle instructions, if devnet deployment is available.
+**Visible:** Real settlement transaction and Explorer page with Ed25519 and MeterBox instructions.
 
 **Demo fallback:** If devnet is unavailable, clearly say demo settlement is recorded locally and not on-chain.
 
 ### 2:30-2:50 - Close and SDK
 
-**On screen:** Payer page. Click Close channel. Then show SDK docs.
+**On screen:** Close/refund transaction and SDK docs.
 
 **Say:** “Closing refunds the unused deposit. MeterBox also provides SDK code for agents and providers.”
 
@@ -98,4 +98,9 @@ MeterBox is payment infrastructure for autonomous AI agents on Solana. It replac
 - Repository: add your GitHub repository URL.
 - Live demo: add the deployed URL, if available.
 - Video: add the uploaded demo video URL.
-- Program ID: `4CoXFP5uD1nxZwXqX7ws49nyaYnAEjPVE9GgWVmcQ865`.
+- Program ID for the prepared build: `2Nre79jBBYUmsZHLqjRTtouyjzBuyE9d8ciB6fPPqVpP` (not yet deployed).
+- The following are historical Devnet links from the previous build using program ID `Ga2tqUHwpZBCK26AJjcYsUoA4JtLzuRmMZkn72WdR1jz`; they do not verify the new program:
+  - Channel open: https://explorer.solana.com/tx/3Rrot9MFcvMrifYRUDWpUKR2V4Mdk1nmJbMf3U974MPqYZpTGkRAkBGyG5uwKv4n1psYBd2pj9WNkdgNMn9CDLMB?cluster=devnet
+  - Channel: https://explorer.solana.com/address/A2agETbFZQxePbvXpFJMX3tm8ZFjACNX9W4MhjUUVj9i?cluster=devnet
+  - Settlement: https://explorer.solana.com/tx/3RbyDkM1MbBpLWM9acYdFsjNhy5Q9eJotQAu5SssunztmLZTMcYCWGo1zCuyEjMXhgRjJXBfVueftPGJZ7GYyBmT?cluster=devnet
+  - Close/refund: https://explorer.solana.com/tx/3YxkM6edXEf3SvzAodNFE2uvPNc3dZA6ssziWNTr1eyY63mqeLtozf8zUsKbgztxjvuXFbQgwsjB6NzEbBUvAbrL?cluster=devnet

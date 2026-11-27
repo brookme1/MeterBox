@@ -2,7 +2,9 @@ import nacl from "tweetnacl";
 import { buildVoucherMessage } from "../shared/voucher.mjs";
 
 function b64(bytes) {
-  return Buffer.from(bytes).toString("base64");
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
 }
 
 export function createMeterBoxFetch({
@@ -10,12 +12,16 @@ export function createMeterBoxFetch({
   channel,
   baseUrl = "",
   spendingLimitLamports = 0n,
+  onVoucher,
 }) {
   let cumulative = 0n;
   let nonce = 0n;
   const limit = BigInt(spendingLimitLamports);
   return async function meterboxFetch(input, init = {}) {
-    let res = await fetch(`${baseUrl}${typeof input === "string" ? input : input.url}`, init);
+    const url = `${baseUrl}${typeof input === "string" ? input : input.url}`;
+    const requestHeaders = new Headers(init.headers);
+    requestHeaders.set("x-meterbox-channel", channel);
+    let res = await fetch(url, { ...init, headers: requestHeaders });
     if (res.status !== 402) return res;
     const paywall = await res.clone().json();
     if (paywall.lastAcceptedCumulative != null) {
@@ -47,13 +53,28 @@ export function createMeterBoxFetch({
       nonce: nonce.toString(),
       signature: b64(signature),
     };
-    const header = b64(Buffer.from(JSON.stringify(payload)));
+    const header = b64(new TextEncoder().encode(JSON.stringify(payload)));
+    onVoucher?.({
+      cumulative: cumulative.toString(),
+      nonce: nonce.toString(),
+      signature: payload.signature,
+      verified: false,
+    });
     const headers = new Headers(init.headers);
+    headers.set("x-meterbox-channel", channel);
     headers.set("x-meterbox-voucher", header);
-    return fetch(`${baseUrl}${typeof input === "string" ? input : input.url}`, {
+    const response = await fetch(url, {
       ...init,
       headers,
     });
+    onVoucher?.({
+      cumulative: cumulative.toString(),
+      nonce: nonce.toString(),
+      signature: payload.signature,
+      verified: response.ok,
+      status: response.status,
+    });
+    return response;
   };
 }
 
