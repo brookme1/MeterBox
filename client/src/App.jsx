@@ -333,13 +333,6 @@ export default function App({ wallet, walletButton }) {
     navigate,
   }), [wallet, walletButton, health, channels, loading, loadError, updated, openChannel, manageChannel, registerAgent, rotateAgent, closeChannel, settleChannel, setAgentPolicy, savePricing, topUpChannel, closeHostedChannel, agentKeys, refresh, navigate]);
 
-  const endpointData = (state?.calls || []).reduce((out, call) => {
-    const found = out.find((v) => v.name === call.name);
-    if (found) found.value += Number(call.price);
-    else out.push({ name: call.name, value: Number(call.price) });
-    return out;
-  }, []);
-
   return (
     <div className="app-shell">
       <button className="mobile-menu" onClick={() => setSidebarOpen((open) => !open)} aria-label="Toggle navigation">☰</button>
