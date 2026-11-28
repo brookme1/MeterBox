@@ -360,3 +360,77 @@ input[readonly] { color: #9295a5; }
   .spec-table div { flex-direction: column; gap: 4px; }
   .spec-table span { text-align: left; }
 }
+
+/* ===== Light theme overrides ===== */
+:root{color-scheme:light;background:#f6f7fb;color:#12141f;--bg:#f6f7fb;--surface:#fff;--raised:#f0f1f7;--raised-2:#e7e9f3;--fg:#12141f;--muted:#5b6075;--dim:#8a8fa3;--purple:#7c3aed;--green:#0a9b6b;--cyan:#0284c7;--amber:#b45309;--border:rgba(18,20,31,.11)}
+.eyebrow{color:#6b7088}
+.sidebar{background:#fff}
+.brand-beta{color:#6d28d9;border-color:rgba(124,58,237,.3)}
+.nav-caption,.sidebar-footer,.updated-note{color:#7a7f94}
+.nav-item{color:#4a4f66}
+.nav-item:hover{background:rgba(18,20,31,.045);color:var(--fg)}
+.nav-item.selected{border-color:rgba(124,58,237,.2);background:rgba(124,58,237,.1);color:#5b21b6}
+.nav-dot{background:#b4b8c9}
+.dot-active{box-shadow:0 0 8px rgba(124,58,237,.5)}
+.network-status{color:#4a4f66}
+.network-chip{color:#0a7f59;border-color:rgba(10,155,107,.25);background:rgba(10,155,107,.07)}
+.wallet-button,.wallet-adapter-button.wallet-button{color:#5b21b6!important;background:rgba(124,58,237,.1)!important;border-color:rgba(124,58,237,.35)!important}
+.wallet-adapter-button.wallet-button:not([disabled]):hover{background:rgba(124,58,237,.18)!important}
+.breadcrumb strong{color:var(--fg)}
+.mobile-menu{background:#fff;color:#2d3146}
+.banner-error{color:#b91c1c}.banner-info{color:#0369a1}.banner-warn{color:#92400e}
+.button{color:var(--fg)}.button-primary{color:#fff}
+.button-primary:not(:disabled):hover{background:#6d28d9;border-color:#6d28d9}
+.button-secondary{background:#fff}
+.button-danger{color:#b91c1c}
+.text-button{color:#6d28d9}.text-button:hover{color:#4c1d95}
+.spinner{border-color:rgba(18,20,31,.15);border-top-color:var(--purple)}
+.metric-icon{background:rgba(18,20,31,.03)}
+.metric-label{color:#5b6075}.metric-note{color:#7a7f94}
+.section-title{color:#3d4156}
+.channel-parties small,.channel-metrics small,.session-address small{color:#646a82}
+.address-text{color:#6d28d9}.address-text:hover{color:#4c1d95}
+.icon-btn{color:#6b7088}.icon-btn:hover{color:#0a7f59}
+.status-pill{color:#0a7f59;border-color:rgba(10,155,107,.25);background:rgba(10,155,107,.08)}
+.status-closed{color:#5b6075;border-color:rgba(18,20,31,.15);background:rgba(18,20,31,.05)}
+.channel-progress-head{color:#4a4f66}
+.progress-track,.api-track{background:#e5e7f0}
+.channel-actions summary,.technical-details summary{color:#2d3146}
+.channel-actions summary span{color:#7a7f94}
+.manage-grid label,.form-stack label,.form-row label,.pricing-grid label{color:#4a4f66}
+input{border-color:rgba(18,20,31,.16);background:#fff;color:var(--fg)}
+input[readonly]{color:#6b7088;background:#f6f7fb}
+.technical-details > div{color:#6b7088}.technical-details .mono{color:#2d3146}
+.agent-secret{color:#92400e}.agent-secret code{color:#b45309}
+.activity-row small{color:#7a7f94}
+.empty-state{color:#2d3146;border-color:rgba(18,20,31,.16)}
+.error-state p,.status-error{color:#b91c1c}
+.status-success{color:#0a7f59}
+.modal-backdrop{background:rgba(18,20,31,.45)}
+.modal-card{background:#fff;border-color:rgba(18,20,31,.12);box-shadow:0 20px 60px rgba(18,20,31,.2)}
+.modal-close{color:#4a4f66}
+.chart-unit,.chart-empty,.price-input span{color:#6b7088}
+.api-bar-row{color:#4a4f66}.api-bar-row b{color:#2d3146}
+.data-table th{color:#5b6075}.data-table td{color:#2d3146}
+.demo-key-label{color:#92400e}
+.live-label,.ledger-count,.counter > span,.explorer-result,.playground-footer{color:#5b6075}
+.http-line{color:#4a4f66;border-bottom-color:rgba(18,20,31,.06)}
+.http-line.ok{color:#0a7f59}.http-line.warn{color:#92400e}.http-time{color:#7a7f94}
+.voucher-row{background:#f6f7fb}
+.nonce-chip{color:#6d28d9}
+.voucher-top b,.voucher-amounts b,.voucher-amounts code{color:#2d3146}
+.voucher-amounts{color:#6b7088}
+.counter strong small{color:#7a7f94}
+.hero h1 span{color:#7c3aed}
+.hero-copy{color:#4a4f66}.hero-trust{color:#6b7088}
+.flow-topline,.flow-step small,.flow-live{color:#6b7088}
+.flow-step{background:#f6f7fb;border-color:rgba(18,20,31,.08)}
+.flow-bottom{color:#4a4f66}.flow-bottom strong{color:#6d28d9}
+.flow-status{color:#0a7f59}
+.step-card p{color:#5b6075}
+.highlight-banner h2 span{color:#7c3aed}
+.docs-nav a{color:#4a4f66}.docs-nav a:hover{color:#4c1d95;background:rgba(124,58,237,.08)}
+.docs-card p,.docs-card li{color:#4a4f66}
+.docs-card code{color:#6d28d9}
+.spec-table b{color:var(--fg)}.spec-table span{color:#5b6075}
+.channel-card,.panel,.metric-card,.flow-card,.step-card{box-shadow:0 1px 2px rgba(18,20,31,.05)}
