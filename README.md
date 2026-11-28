@@ -22,6 +22,14 @@ SOL on Solana devnet and are funded and managed by the payer wallet.
 - SQLite stores API state and endpoint pricing. On devnet startup the API
   reconciles open channel account data from the program.
 
+## Live demo
+
+- App: https://meterbox-phi.vercel.app
+- API: https://meterbox-api.onrender.com (Solana devnet). It runs on a free
+  plan and sleeps when idle, so the first request can take about a minute.
+- Use Phantom or Solflare set to **devnet**. Devnet SOL is free from
+  https://faucet.solana.com.
+
 ## Deployment
 
 - Program ID: [`2Nre79jBBYUmsZHLqjRTtouyjzBuyE9d8ciB6fPPqVpP`](https://explorer.solana.com/address/2Nre79jBBYUmsZHLqjRTtouyjzBuyE9d8ciB6fPPqVpP?cluster=devnet)
@@ -30,15 +38,13 @@ SOL on Solana devnet and are funded and managed by the payer wallet.
 - The fresh program keypair is stored locally in WSL at
   `~/.config/solana/meterbox-program-keypair.json`. Its private contents must
   never be committed, uploaded, or shared.
-- The live Vercel build still uses the legacy `Ga2t...` program ID. Redeploy
-  the frontend and API with the new ID before using the live wallet workflow.
-- GitHub reports a successful Vercel deployment check for commit
-  [`dc8cf88`](https://github.com/brookme1/MeterBox/commit/dc8cf881f5d3ed33d5913a0cc142a1ac3c75da64).
-  That build uses the legacy program ID; see [DEPLOY.md](./DEPLOY.md) for the
-  verified program status and app deployment steps.
+- The Vercel frontend and the Render API both build from `main` and use this
+  program ID.
+- The hosted API runs on Render's free plan without a persistent disk: SQLite
+  history resets on restart, and open channels are re-read from devnet on
+  startup.
 
-See [DEPLOY.md](./DEPLOY.md) for exact Vercel/Render setup steps and the
-required persistent disk and server-only secrets.
+See [DEPLOY.md](./DEPLOY.md) for Vercel/Render setup steps and the server-only secrets.
 
 ## Screenshots
 
